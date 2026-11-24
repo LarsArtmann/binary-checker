@@ -52,17 +52,18 @@ func discoverGitRoot(ctx context.Context, dir string) (string, error) {
 	return filepath.Clean(root), nil
 }
 
-// tracked returns every stage-0 file in the index. Symlinks and submodule
-// entries are omitted: they carry no inspectable content.
-func (g *gitClient) tracked(ctx context.Context) ([]trackedFile, error) {
+// tracked returns every stage-0 file in the index and the number of index
+// entries that carry no inspectable content (symlinks and submodules).
+func (g *gitClient) tracked(ctx context.Context) ([]trackedFile, int, error) {
 	output, err := runGit(ctx, g.root, "ls-files", "--stage", "-z")
 	if err != nil {
-		return nil, fmt.Errorf("list tracked files: %w", err)
+		return nil, 0, fmt.Errorf("list tracked files: %w", err)
 	}
 
 	var files []trackedFile
 
 	seen := make(map[string]bool)
+	skipped := make(map[string]bool)
 
 	for _, record := range bytes.Split(output, []byte{0}) {
 		if len(record) == 0 {
@@ -80,16 +81,22 @@ func (g *gitClient) tracked(ctx context.Context) ([]trackedFile, error) {
 		}
 
 		mode, stage, path := fields[0], fields[2], string(record[tab+1:])
-		if stage != "0" || mode == "120000" || mode == "160000" || seen[path] {
+		if stage != "0" || seen[path] {
 			continue
 		}
 
 		seen[path] = true
 
+		if mode == "120000" || mode == "160000" {
+			skipped[path] = true
+
+			continue
+		}
+
 		files = append(files, trackedFile{Path: path, Mode: mode})
 	}
 
-	return files, nil
+	return files, len(skipped), nil
 }
 
 // trackedIgnored returns files that are tracked despite matching .gitignore.

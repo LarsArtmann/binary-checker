@@ -107,7 +107,7 @@ func (c *Checker) scan(ctx context.Context, dir string) (*ScanResult, error) {
 		return nil, err
 	}
 
-	tracked, err := git.tracked(ctx)
+	tracked, indexSkipped, err := git.tracked(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +129,7 @@ func (c *Checker) scan(ctx context.Context, dir string) (*ScanResult, error) {
 
 	inspections := inspectAll(ctx, git.root, tracked, config, lfs)
 
-	result := &ScanResult{Root: git.root}
+	result := &ScanResult{Root: git.root, FilesSkipped: indexSkipped}
 
 	flagged := make(map[string]bool)
 
