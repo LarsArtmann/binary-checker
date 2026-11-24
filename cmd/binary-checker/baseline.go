@@ -1,11 +1,13 @@
 package main
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"encoding/json/jsontext"
 
 	"github.com/larsartmann/go-finding"
 
@@ -72,7 +74,7 @@ func saveBaseline(path string, findings []finding.Finding) error {
 		file.Findings = append(file.Findings, string(item.ID))
 	}
 
-	data, err := json.MarshalIndent(file, "", "  ")
+	data, err := json.Marshal(file, jsontext.WithIndentPrefix(""), jsontext.WithIndent("  "))
 	if err != nil {
 		return fmt.Errorf("%w: encode %q: %w", errBaseline, path, err)
 	}

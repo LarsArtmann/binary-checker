@@ -65,22 +65,22 @@ func (g *gitClient) tracked(ctx context.Context) ([]trackedFile, int, error) {
 	seen := make(map[string]bool)
 	skipped := make(map[string]bool)
 
-	for _, record := range bytes.Split(output, []byte{0}) {
+	for record := range bytes.SplitSeq(output, []byte{0}) {
 		if len(record) == 0 {
 			continue
 		}
 
-		tab := bytes.IndexByte(record, '\t')
-		if tab < 0 {
+		before, after, ok := bytes.Cut(record, []byte{'\t'})
+		if !ok {
 			continue
 		}
 
-		fields := strings.Fields(string(record[:tab]))
+		fields := strings.Fields(string(before))
 		if len(fields) < 3 {
 			continue
 		}
 
-		mode, stage, path := fields[0], fields[2], string(record[tab+1:])
+		mode, stage, path := fields[0], fields[2], string(after)
 		if stage != "0" || seen[path] {
 			continue
 		}
@@ -108,7 +108,7 @@ func (g *gitClient) trackedIgnored(ctx context.Context) ([]string, error) {
 
 	var paths []string
 
-	for _, record := range bytes.Split(output, []byte{0}) {
+	for record := range bytes.SplitSeq(output, []byte{0}) {
 		if len(record) > 0 {
 			paths = append(paths, string(record))
 		}

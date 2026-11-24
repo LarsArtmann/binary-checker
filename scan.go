@@ -222,10 +222,7 @@ func inspectAll(
 	config Config,
 	lfs map[string]bool,
 ) []fileInspection {
-	workers := min(runtime.NumCPU(), maxScanWorkers)
-	if workers < 1 {
-		workers = 1
-	}
+	workers := max(min(runtime.NumCPU(), maxScanWorkers), 1)
 
 	inspections := make([]fileInspection, len(files))
 	jobs := make(chan int)
@@ -233,15 +230,13 @@ func inspectAll(
 	var waitGroup sync.WaitGroup
 
 	for range workers {
-		waitGroup.Add(1)
 
-		go func() {
-			defer waitGroup.Done()
+		waitGroup.Go(func() {
 
 			for index := range jobs {
 				inspections[index] = inspectFile(ctx, root, files[index], config, lfs)
 			}
-		}()
+		})
 	}
 
 	for index := range files {

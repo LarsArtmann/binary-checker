@@ -38,19 +38,19 @@ binary-checker --list          # list rules and defaults
 
 Exit codes follow the ecosystem convention:
 
-| Code | Meaning                                                           |
-| ---- | ----------------------------------------------------------------- |
-| 0    | Clean (suppressed and baselined findings do not fail the run)     |
-| 1    | Findings at or above `--min-confidence` (default: `high`)         |
+| Code | Meaning                                                            |
+| ---- | ------------------------------------------------------------------ |
+| 0    | Clean (suppressed and baselined findings do not fail the run)      |
+| 1    | Findings at or above `--min-confidence` (default: `high`)          |
 | 2    | Only lower-confidence findings (triage), or the tool could not run |
 
 ## Rules
 
-| ID    | Default | Severity | Confidence        | What it reports                                                                 |
-| ----- | ------- | -------- | ----------------- | ------------------------------------------------------------------------------- |
-| BC001 | on      | error    | full (NUL byte) / high (text ratio) | A tracked file's content is binary.                        |
-| BC002 | on      | warning  | medium            | A tracked file matches a binary artifact pattern but reads as text.             |
-| BC003 | **off** | warning  | full              | A tracked file also matches `.gitignore` (ignore rules do not apply to tracked files). |
+| ID    | Default | Severity | Confidence                          | What it reports                                                                        |
+| ----- | ------- | -------- | ----------------------------------- | -------------------------------------------------------------------------------------- |
+| BC001 | on      | error    | full (NUL byte) / high (text ratio) | A tracked file's content is binary.                                                    |
+| BC002 | on      | warning  | medium                              | A tracked file matches a binary artifact pattern but reads as text.                    |
+| BC003 | **off** | warning  | full                                | A tracked file also matches `.gitignore` (ignore rules do not apply to tracked files). |
 
 BC003 is opt-in because it is a different concern from binary content:
 
@@ -65,8 +65,15 @@ binary-checker --enable BC003
 ```json
 {
   "ignore": [
-    { "path": "testdata/fixtures/**", "reason": "binary fixture corpus, intentionally committed" },
-    { "path": "assets/brand.woff2", "reason": "brand font served from the repo", "rules": ["BC001"] }
+    {
+      "path": "testdata/fixtures/**",
+      "reason": "binary fixture corpus, intentionally committed"
+    },
+    {
+      "path": "assets/brand.woff2",
+      "reason": "brand font served from the repo",
+      "rules": ["BC001"]
+    }
   ],
   "allow_fonts": true,
   "font_max_bytes": 524288,

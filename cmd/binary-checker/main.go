@@ -251,7 +251,7 @@ func selectRules(all []linter.Rule, enable, disable string) ([]linter.Rule, erro
 func splitIDs(value string) map[string]bool {
 	result := make(map[string]bool)
 
-	for _, part := range strings.Split(value, ",") {
+	for part := range strings.SplitSeq(value, ",") {
 		part = strings.TrimSpace(part)
 		if part != "" {
 			result[part] = true

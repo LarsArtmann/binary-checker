@@ -1,9 +1,11 @@
 package main
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
+
+	"encoding/json/jsontext"
 
 	"github.com/larsartmann/go-finding"
 
@@ -161,7 +163,7 @@ func renderJSON(writer io.Writer, partitions reportPartitions, scan *binarycheck
 		output.FilesExempt = scan.ExemptFiles
 	}
 
-	data, err := json.MarshalIndent(output, "", "  ")
+	data, err := json.Marshal(output, jsontext.WithIndentPrefix(""), jsontext.WithIndent("  "))
 	if err != nil {
 		return fmt.Errorf("encode JSON report: %w", err)
 	}

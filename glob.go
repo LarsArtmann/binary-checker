@@ -24,8 +24,8 @@ func MatchPath(pattern, relPath string) bool {
 		return false
 	}
 
-	if strings.HasSuffix(pattern, "/") {
-		dir := strings.TrimSuffix(pattern, "/")
+	if before, ok := strings.CutSuffix(pattern, "/"); ok {
+		dir := before
 		return hasDirPrefix(relPath, dir)
 	}
 

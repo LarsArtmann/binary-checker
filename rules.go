@@ -126,7 +126,7 @@ func Rules(checker *Checker) []linter.Rule {
 	rules := make([]linter.Rule, 0, len(ruleTable))
 
 	for _, spec := range ruleTable {
-		rule := checkerRule{checker: checker, RuleFunc: linter.RuleFunc{
+		rule := checkerRule{checker: checker,
 			Meta: linter.RuleMeta{
 				ID:          spec.id,
 				Name:        spec.name,
@@ -135,8 +135,7 @@ func Rules(checker *Checker) []linter.Rule {
 				Sev:         spec.severity,
 				ToolName:    finding.ToolName(ToolName),
 			},
-			Run: ruleRunner(checker, spec.id),
-		}}
+			Run: ruleRunner(checker, spec.id)}
 
 		if spec.optIn {
 			rules = append(rules, optInRule{rule})

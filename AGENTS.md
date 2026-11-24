@@ -14,17 +14,17 @@ nix build .
 
 ## Layout
 
-| Path                         | Purpose                                                        |
-| ---------------------------- | -------------------------------------------------------------- |
-| `binary.go`                  | Content heuristic (NUL byte or printable ratio)                |
-| `patterns.go`                | Binary artifact, font, and small-image pattern tables          |
-| `glob.go`                    | `**`-aware path matching used by patterns and config ignores   |
-| `git.go`                     | Read-only git queries: index, tracked-but-ignored, LFS attrs   |
-| `config.go`                  | `.binary-checker.json` schema, defaults, validation            |
-| `scan.go`                    | Checker: git walk, parallel inspection, finding construction   |
-| `rules.go`                   | Stable rule IDs, `RuleFunc` wiring, registry construction      |
-| `pkg/provider/provider.go`   | `toolsdk.Register` — BuildFlow self-registration               |
-| `cmd/binary-checker/`        | CLI: flags, human/JSON/SARIF output, baseline                  |
+| Path                       | Purpose                                                      |
+| -------------------------- | ------------------------------------------------------------ |
+| `binary.go`                | Content heuristic (NUL byte or printable ratio)              |
+| `patterns.go`              | Binary artifact, font, and small-image pattern tables        |
+| `glob.go`                  | `**`-aware path matching used by patterns and config ignores |
+| `git.go`                   | Read-only git queries: index, tracked-but-ignored, LFS attrs |
+| `config.go`                | `.binary-checker.json` schema, defaults, validation          |
+| `scan.go`                  | Checker: git walk, parallel inspection, finding construction |
+| `rules.go`                 | Stable rule IDs, `RuleFunc` wiring, registry construction    |
+| `pkg/provider/provider.go` | `toolsdk.Register` — BuildFlow self-registration             |
+| `cmd/binary-checker/`      | CLI: flags, human/JSON/SARIF output, baseline                |
 
 ## Invariants
 
