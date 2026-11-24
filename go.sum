@@ -1,0 +1,8 @@
+github.com/larsartmann/go-error-family v0.12.0 h1:HEtocvwaPe9udDusqDqV0pxN9Wx98KHQBK0MEHZupzg=
+github.com/larsartmann/go-error-family v0.12.0/go.mod h1:gB43rKC69SoPilihuze43OFqKYMGQxDNUi/25PF9MgE=
+github.com/larsartmann/go-finding v1.16.0 h1:QSssn4tlDAob9R7FT/q5hd853xHgUizJoev4LbDPVx8=
+github.com/larsartmann/go-finding v1.16.0/go.mod h1:B5UnA6hOI5WzO7kCECNyFSMiLTDFAHwxCiXGgcPYLhk=
+github.com/larsartmann/go-finding/toolsdk v1.16.0 h1:RgIapYJksJNwu4Og4LVsmJdOLys5O5LAQK+ymxmrPdc=
+github.com/larsartmann/go-finding/toolsdk v1.16.0/go.mod h1:zj3DnZkfCsC16Pj2xwzdkNIuLpbl8t9WKSf12F5akfY=
+github.com/larsartmann/go-linter-sdk v0.6.1 h1:+GDwX6ii1vEYLLJJX3XJWWbPxBGGXnDxtLBCWI8QA+k=
+github.com/larsartmann/go-linter-sdk v0.6.1/go.mod h1:mx6ItzGg/wej48PXEblnwibl7veB/NZTS/DETvM4T1M=
