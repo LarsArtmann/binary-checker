@@ -56,7 +56,23 @@ func renderHuman(
 	if len(partitions.actionable) == 0 && len(partitions.triage) == 0 &&
 		(!showSuppressed || len(partitions.suppressed) == 0) &&
 		(!showBaselined || len(partitions.baselined) == 0) {
-		fmt.Fprintln(writer, "No binary files found.")
+		fmt.Fprintln(writer, "No actionable findings.")
+
+		if len(partitions.baselined) > 0 {
+			fmt.Fprintf(
+				writer,
+				"%d finding(s) accepted by the baseline (use --show-baselined).\n",
+				len(partitions.baselined),
+			)
+		}
+
+		if len(partitions.suppressed) > 0 {
+			fmt.Fprintf(
+				writer,
+				"%d finding(s) suppressed by config (use --show-suppressed).\n",
+				len(partitions.suppressed),
+			)
+		}
 	}
 
 	writeSection(writer, "ACTIONABLE", partitions.actionable)
