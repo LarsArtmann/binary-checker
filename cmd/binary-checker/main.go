@@ -46,8 +46,12 @@ type options struct {
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
-	opts, ok := parseOptions(args, stderr)
-	if !ok {
+	opts, err := parseOptions(args, stderr)
+	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return exitClean
+		}
+
 		return exitOperational
 	}
 
@@ -57,7 +61,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return exitClean
 	}
 
-	allRules := binarycheck.Rules(binarycheck.NewChecker(binarycheck.WithConfigPath(opts.configPath)))
+	checker := binarycheck.NewChecker(binarycheck.WithConfigPath(opts.configPath))
+	allRules := binarycheck.Rules(checker)
 
 	if opts.listRules {
 		writeRuleList(stdout, allRules)
@@ -79,7 +84,6 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return exitOperational
 	}
 
-	checker := binarycheck.NewChecker(binarycheck.WithConfigPath(opts.configPath))
 	registry := linter.NewRegistryFromRules(selected, linter.WithToolName(binarycheck.ToolName))
 
 	report, err := registry.Run(context.Background(), opts.dir, linter.ContinueOnError())
@@ -144,7 +148,7 @@ func render(opts options, stdout io.Writer, partitions reportPartitions, scan *b
 	}
 }
 
-func parseOptions(args []string, stderr io.Writer) (options, bool) {
+func parseOptions(args []string, stderr io.Writer) (options, error) {
 	var opts options
 
 	flags := flag.NewFlagSet("binary-checker", flag.ContinueOnError)
@@ -170,11 +174,7 @@ func parseOptions(args []string, stderr io.Writer) (options, bool) {
 	}
 
 	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return opts, false
-		}
-
-		return opts, false
+		return opts, err
 	}
 
 	switch flags.NArg() {
@@ -183,20 +183,16 @@ func parseOptions(args []string, stderr io.Writer) (options, bool) {
 	case 1:
 		opts.dir = flags.Arg(0)
 	default:
-		fmt.Fprintln(stderr, "Error: expected at most one directory argument")
-
-		return opts, false
+		return opts, errors.New("expected at most one directory argument")
 	}
 
 	switch opts.format {
 	case "human", "json", "sarif":
 	default:
-		fmt.Fprintf(stderr, "Error: unknown format %q (want human, json, or sarif)\n", opts.format)
-
-		return opts, false
+		return opts, fmt.Errorf("unknown format %q (want human, json, or sarif)", opts.format)
 	}
 
-	return opts, true
+	return opts, nil
 }
 
 func parseThreshold(value string) (finding.Confidence, error) {

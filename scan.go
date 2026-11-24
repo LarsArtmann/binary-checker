@@ -352,9 +352,9 @@ func buildFinding(ruleID string, inspection fileInspection, suppressionReason st
 		WithSuggestion(rule.suggestion(inspection.file.Path)).
 		WithTags(rule.tags...).
 		WithMetadata(map[string]string{
-			"binary-check.size":    strconv.FormatInt(inspection.size, 10),
+			"binary-check.size":     strconv.FormatInt(inspection.size, 10),
 			"binary-check.evidence": inspection.verdict.Evidence,
-			"binary-check.pattern": inspection.pattern,
+			"binary-check.pattern":  inspection.pattern,
 		})
 
 	if suppressionReason != "" {

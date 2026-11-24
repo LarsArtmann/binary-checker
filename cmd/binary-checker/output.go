@@ -120,14 +120,14 @@ func writeSection(writer io.Writer, title string, findings []finding.Finding) {
 }
 
 type jsonReport struct {
-	Tool        string            `json:"tool"`
-	Version     string            `json:"version"`
-	FilesScanned int              `json:"filesScanned"`
-	FilesExempt int               `json:"filesExempt"`
-	Actionable  []finding.Finding `json:"actionable"`
-	Triage      []finding.Finding `json:"triage"`
-	Baselined   []finding.Finding `json:"baselined"`
-	Suppressed  []finding.Finding `json:"suppressed"`
+	Tool         string            `json:"tool"`
+	Version      string            `json:"version"`
+	FilesScanned int               `json:"filesScanned"`
+	FilesExempt  int               `json:"filesExempt"`
+	Actionable   []finding.Finding `json:"actionable"`
+	Triage       []finding.Finding `json:"triage"`
+	Baselined    []finding.Finding `json:"baselined"`
+	Suppressed   []finding.Finding `json:"suppressed"`
 }
 
 func renderJSON(writer io.Writer, partitions reportPartitions, scan *binarycheck.ScanResult, version string) error {
