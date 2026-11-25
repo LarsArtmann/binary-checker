@@ -81,8 +81,17 @@ BuildFlow consumes this repo as a flake input + prepared-source dependency:
    entry is needed).
 4. Add the require to `tools/go.mod` (and root `go.mod` indirect) at the tag
    version, plus the blank import in `tools/providers/sdk_imports.go`.
-5. `nix run .#update-vendor-hash`; run `nix build .` and the sdk import
-   regression test.
+5. Delete any `binary-check` row from BuildFlow's `providerlessToolMeta`
+   (`domain/tool/tool_metadata.go`) in the SAME change — a surviving seed row
+   panics at startup as `tool metadata split-brain` once the provider registers.
+6. `nix run .#update-vendor-hash`; run `nix build .`, the sdk import regression
+   test, and `TestRoutingReferences_HaveProviders`.
+
+The provider's `Trigger` MUST declare `Files` (`**/*` here). BuildFlow keys a
+detector's result cache on its declared inputs and falls back to the trigger's
+patterns; an empty trigger makes the cache blind, so a cached "clean" verdict
+survives every edit to the tree being scanned (this shipped in v0.1.0 and was
+fixed in v0.1.1 — `TestProviderSpec` now fails if the file set goes empty).
 
 Never commit a local-path replace for this module: BuildFlow's audit gate
 rejects path replaces outside the repo root (gotcha #286).
