@@ -32,9 +32,12 @@ type baseline struct {
 	ids map[string]bool
 }
 
+// loadBaseline reads a baseline file. An empty path means "no baseline was
+// configured", which is an empty accepted set, never a nil pointer: callers can
+// always ask whether a finding is accepted.
 func loadBaseline(path string) (*baseline, error) {
 	if path == "" {
-		return nil, nil
+		return &baseline{ids: make(map[string]bool)}, nil
 	}
 
 	data, err := os.ReadFile(path)
@@ -70,7 +73,7 @@ func loadBaseline(path string) (*baseline, error) {
 }
 
 func (b *baseline) contains(item finding.Finding) bool {
-	return b != nil && b.ids[string(item.ID)]
+	return b.ids[string(item.ID)]
 }
 
 func saveBaseline(path string, findings []finding.Finding) error {

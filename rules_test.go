@@ -28,6 +28,8 @@ func TestRuleIDsAreStable(t *testing.T) {
 }
 
 func TestDefaultRegistryExcludesOptInRule(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 	gittest.WriteFile(t, dir, ".gitignore", []byte("*.log\n"))
 	gittest.WriteFile(t, dir, "debug.log", []byte("debug\n"))
@@ -50,6 +52,8 @@ func TestDefaultRegistryExcludesOptInRule(t *testing.T) {
 }
 
 func TestOptInRuleRunsWhenSelected(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 	gittest.WriteFile(t, dir, ".gitignore", []byte("*.log\n"))
 	gittest.WriteFile(t, dir, "debug.log", []byte("debug\n"))

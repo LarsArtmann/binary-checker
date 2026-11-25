@@ -30,6 +30,8 @@ func TestProviderSpec(t *testing.T) {
 }
 
 func TestDetectReportsTrackedBinary(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 	gittest.WriteFile(t, dir, "blob.bin", []byte{0x00, 0x01, 0x02})
 	gittest.AddFiles(t, dir, "blob.bin")
@@ -51,6 +53,8 @@ func TestDetectReportsTrackedBinary(t *testing.T) {
 }
 
 func TestDetectDropsConfigSuppressedFindings(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 	gittest.WriteFile(t, dir, ".binary-checker.json", []byte(
 		`{"ignore":[{"path":"blob.bin","reason":"fixture"}]}`,
@@ -80,6 +84,8 @@ func TestDetectDropsConfigSuppressedFindings(t *testing.T) {
 }
 
 func TestDetectFailsOutsideGitRepository(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 
 	ctx := finding.WithWorkingDir(context.Background(), dir)

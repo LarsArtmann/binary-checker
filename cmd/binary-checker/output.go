@@ -143,8 +143,8 @@ func writeSection(writer io.Writer, title string, findings []finding.Finding) {
 type jsonReport struct {
 	Tool         string            `json:"tool"`
 	Version      string            `json:"version"`
-	FilesScanned int               `json:"filesScanned"`
-	FilesExempt  int               `json:"filesExempt"`
+	FilesScanned int               `json:"files_scanned"`
+	FilesExempt  int               `json:"files_exempt"`
 	Actionable   []finding.Finding `json:"actionable"`
 	Triage       []finding.Finding `json:"triage"`
 	Baselined    []finding.Finding `json:"baselined"`

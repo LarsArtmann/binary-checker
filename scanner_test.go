@@ -38,6 +38,8 @@ func findingsByRule(result *ScanResult, ruleID string) []finding.Finding {
 }
 
 func TestScanDetectsTrackedBinaryContent(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 
 	gittest.WriteFile(t, dir, "README.md", []byte("hello\n"))
@@ -74,6 +76,8 @@ func TestScanDetectsTrackedBinaryContent(t *testing.T) {
 }
 
 func TestScanFlagsBinaryExtensionWithTextContent(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 
 	gittest.WriteFile(t, dir, "archive.zip", []byte("this is not really a zip file"))
@@ -97,6 +101,8 @@ func TestScanFlagsBinaryExtensionWithTextContent(t *testing.T) {
 }
 
 func TestScanExemptsSmallAssetsAndFlagsOversizedOnes(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 
 	smallPNG := append([]byte{0x89, 'P', 'N', 'G', 0x1a, '\n', 0x00}, make([]byte, 16)...)
@@ -132,6 +138,8 @@ func TestScanExemptsSmallAssetsAndFlagsOversizedOnes(t *testing.T) {
 }
 
 func TestScanSkipsGitLFSFiles(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 
 	gittest.WriteFile(t, dir, ".gitattributes", []byte("*.psd filter=lfs diff=lfs merge=lfs -text\n"))
@@ -150,6 +158,8 @@ func TestScanSkipsGitLFSFiles(t *testing.T) {
 }
 
 func TestScanSkipsSymlinks(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 
 	gittest.WriteFile(t, dir, "README.md", []byte("hello\n"))
@@ -174,6 +184,8 @@ func TestScanSkipsSymlinks(t *testing.T) {
 }
 
 func TestScanReportsTrackedButIgnored(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 
 	gittest.WriteFile(t, dir, ".gitignore", []byte("*.log\n"))
@@ -193,6 +205,8 @@ func TestScanReportsTrackedButIgnored(t *testing.T) {
 }
 
 func TestScanAppliesConfigSuppression(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 
 	gittest.WriteFile(t, dir, DefaultConfigName, []byte(
@@ -222,6 +236,8 @@ func TestScanAppliesConfigSuppression(t *testing.T) {
 }
 
 func TestScanRejectsNonGitDirectory(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 
 	_, err := NewChecker().Scan(context.Background(), dir)
@@ -231,6 +247,8 @@ func TestScanRejectsNonGitDirectory(t *testing.T) {
 }
 
 func TestScanOrdersFindingsDeterministically(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 
 	gittest.WriteFile(t, dir, "b.bin", []byte{0x00})
@@ -253,6 +271,8 @@ func TestScanOrdersFindingsDeterministically(t *testing.T) {
 }
 
 func TestCheckerMemoizesScans(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 	gittest.WriteFile(t, dir, "blob.bin", []byte{0x00})
 	gittest.AddFiles(t, dir, "blob.bin")

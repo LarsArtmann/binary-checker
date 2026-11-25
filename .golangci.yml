@@ -177,7 +177,10 @@ linters:
         - stdlib
         - generic
     makezero:
-      always: true
+      # Only report a slice that is APPENDED to after being created with a
+      # non-zero length. `make([]T, n)` followed by index assignment is the
+      # correct preallocation idiom and must not be flagged.
+      always: false
     mnd:
       ignored-numbers:
         - "0"
@@ -214,6 +217,14 @@ linters:
         - name: unused-parameter
         - name: var-declaration
         - name: var-naming
+    tagliatelle:
+      case:
+        rules:
+          # .binary-checker.json is a config-file wire format, not a Go API:
+          # its snake_case keys are documented in the README and already in
+          # use, so the tag convention follows the file, not the struct.
+          json: snake
+          yaml: snake
     tagalign:
       align: false
       order:

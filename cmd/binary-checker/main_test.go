@@ -21,6 +21,8 @@ func runCLI(t *testing.T, args ...string) (int, string, string) {
 }
 
 func TestRunReportsActionableFindings(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 	gittest.WriteFile(t, dir, "blob.bin", []byte{0x00, 0x01})
 	gittest.AddFiles(t, dir, "blob.bin")
@@ -36,6 +38,8 @@ func TestRunReportsActionableFindings(t *testing.T) {
 }
 
 func TestRunTriageExitCodeForLowConfidenceFindings(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 	gittest.WriteFile(t, dir, "archive.zip", []byte("not a zip"))
 	gittest.AddFiles(t, dir, "archive.zip")
@@ -51,6 +55,8 @@ func TestRunTriageExitCodeForLowConfidenceFindings(t *testing.T) {
 }
 
 func TestRunJSONFormat(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 	gittest.WriteFile(t, dir, "blob.bin", []byte{0x00, 0x01})
 	gittest.AddFiles(t, dir, "blob.bin")
@@ -75,6 +81,8 @@ func TestRunJSONFormat(t *testing.T) {
 }
 
 func TestRunSARIFFormat(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 	gittest.WriteFile(t, dir, "blob.bin", []byte{0x00, 0x01})
 	gittest.AddFiles(t, dir, "blob.bin")
@@ -99,6 +107,8 @@ func TestRunSARIFFormat(t *testing.T) {
 }
 
 func TestRunBaselineAcceptsKnownFindings(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 	gittest.WriteFile(t, dir, "blob.bin", []byte{0x00, 0x01})
 	gittest.AddFiles(t, dir, "blob.bin")
@@ -130,6 +140,8 @@ func TestRunBaselineAcceptsKnownFindings(t *testing.T) {
 }
 
 func TestRunSuppressedFindingsAreHiddenByDefault(t *testing.T) {
+	t.Parallel()
+
 	dir := gittest.NewRepo(t)
 	gittest.WriteFile(t, dir, ".binary-checker.json", []byte(
 		`{"ignore":[{"path":"blob.bin","reason":"fixture"}]}`,
@@ -157,6 +169,8 @@ func TestRunSuppressedFindingsAreHiddenByDefault(t *testing.T) {
 }
 
 func TestRunListRules(t *testing.T) {
+	t.Parallel()
+
 	code, stdout, stderr := runCLI(t, "--list")
 	if code != exitClean {
 		t.Fatalf("exit = %d, stderr = %s", code, stderr)
@@ -170,6 +184,8 @@ func TestRunListRules(t *testing.T) {
 }
 
 func TestRunRejectsUnknownRule(t *testing.T) {
+	t.Parallel()
+
 	code, _, stderr := runCLI(t, "--enable", "BC999", ".")
 	if code != exitOperational {
 		t.Fatalf("exit = %d, want %d", code, exitOperational)
@@ -181,6 +197,8 @@ func TestRunRejectsUnknownRule(t *testing.T) {
 }
 
 func TestRunNotGitRepository(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 
 	code, _, stderr := runCLI(t, dir)

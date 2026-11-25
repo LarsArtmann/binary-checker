@@ -44,7 +44,7 @@ func gitHealthCheck(_ context.Context) error {
 	return nil
 }
 
-func newDetector() finding.Detector {
+func newDetector() *suppressionFilteringDetector {
 	return &suppressionFilteringDetector{
 		inner: linter.DetectorFromRegistry(binarycheck.NewRegistry(nil), binarycheck.ToolName),
 	}
@@ -61,7 +61,7 @@ func (d *suppressionFilteringDetector) Name() string { return d.inner.Name() }
 func (d *suppressionFilteringDetector) Detect(ctx context.Context) ([]finding.Finding, error) {
 	findings, err := d.inner.Detect(ctx)
 	if err != nil {
-		return nil, err
+		return nil, errorfamily.WrapInfrastructuref(err, binarycheck.ToolName, "scan for tracked binaries")
 	}
 
 	return activeFindings(findings), nil
@@ -70,7 +70,7 @@ func (d *suppressionFilteringDetector) Detect(ctx context.Context) ([]finding.Fi
 func (d *suppressionFilteringDetector) DetectV2(ctx context.Context) (finding.DetectResult, error) {
 	result, err := finding.RunDetect(ctx, d.inner)
 	if err != nil {
-		return result, err
+		return result, errorfamily.WrapInfrastructuref(err, binarycheck.ToolName, "scan for tracked binaries")
 	}
 
 	result.Findings = activeFindings(result.Findings)
