@@ -25,8 +25,12 @@ import (
 // registration runs at init time.
 var Provider = toolsdk.Register( //nolint:gochecknoglobals // registration runs at package init; toolsdk.Register returns the spec handle
 	toolsdk.Spec{
-		Name:    binarycheck.ToolName,
-		Trigger: toolsdk.AnyLanguage(),
+		Name: binarycheck.ToolName,
+		// Every tracked file is a candidate input, so the trigger declares the
+		// whole tree: BuildFlow's result cache falls back to the trigger's file
+		// patterns when a detector's FileContract is empty, and an EMPTY trigger
+		// would make the cache key blind to every file this tool reads.
+		Trigger: toolsdk.AnyLanguage("**/*"),
 		Description: "Detects git-tracked binary files that should not be committed " +
 			"(NUL-byte/text-ratio content analysis plus binary artifact patterns; " +
 			"Git LFS pointers, symlinks, submodules, and size-bounded font/image assets are exempt). " +

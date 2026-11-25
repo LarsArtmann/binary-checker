@@ -20,8 +20,16 @@ func TestProviderSpec(t *testing.T) {
 		t.Fatal("Description is required by toolsdk")
 	}
 
-	if Provider.Trigger.Language != "" || len(Provider.Trigger.Files) != 0 {
-		t.Fatalf("expected a language-agnostic always-on trigger, got %+v", Provider.Trigger)
+	if Provider.Trigger.Language != "" {
+		t.Fatalf("expected a language-agnostic trigger, got %+v", Provider.Trigger)
+	}
+
+	// Consumer contract: an empty trigger file set leaves BuildFlow's result
+	// cache blind to every file this detector reads (the key falls back to the
+	// trigger patterns when no FileContract is declared), so a cached "clean"
+	// verdict would survive any edit to the tree being scanned.
+	if len(Provider.Trigger.Files) == 0 {
+		t.Fatal("trigger must declare file patterns; an empty set makes the consumer's cache key blind")
 	}
 
 	if Provider.Detect == nil || Provider.HealthCheck == nil {
