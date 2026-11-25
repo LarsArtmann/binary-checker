@@ -133,18 +133,18 @@ func (g *gitClient) trackedIgnored(ctx context.Context) ([]string, error) {
 //
 // The check runs through `git check-attr`, which applies the same attribute
 // resolution git itself uses (nested .gitattributes files, pattern precedence).
-func (g *gitClient) lfsPaths(ctx context.Context, paths []string) (map[string]bool, error) {
+// Attribute lookup is an FP-control nicety, so a git that cannot answer
+// degrades to no LFS knowledge rather than failing the scan.
+func (g *gitClient) lfsPaths(ctx context.Context, paths []string) map[string]bool {
 	if len(paths) == 0 {
-		return nil, nil
+		return nil
 	}
 
 	input := strings.Join(paths, "\x00") + "\x00"
 
 	output, err := runGitWithInput(ctx, g.root, input, "check-attr", "-z", "--stdin", "filter")
 	if err != nil {
-		// Attribute lookup is an FP-control nicety. A git version that cannot
-		// answer must not fail the whole scan; fall back to no LFS knowledge.
-		return nil, nil //nolint:nilerr // deliberate degradation: LFS detection is advisory
+		return nil
 	}
 
 	result := make(map[string]bool)
@@ -157,7 +157,7 @@ func (g *gitClient) lfsPaths(ctx context.Context, paths []string) (map[string]bo
 		}
 	}
 
-	return result, nil
+	return result
 }
 
 func runGit(ctx context.Context, dir string, args ...string) ([]byte, error) {

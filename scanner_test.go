@@ -59,10 +59,10 @@ func addRepoFiles(t *testing.T, dir string, rels ...string) {
 	gitRun(t, dir, args...)
 }
 
-func scanRepo(t *testing.T, dir string, opts ...CheckerOption) *ScanResult {
+func scanRepo(t *testing.T, dir string) *ScanResult {
 	t.Helper()
 
-	checker := NewChecker(opts...)
+	checker := NewChecker()
 
 	result, err := checker.Scan(context.Background(), dir)
 	if err != nil {

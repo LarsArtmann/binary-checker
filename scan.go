@@ -127,10 +127,7 @@ func (c *Checker) scan(ctx context.Context, dir string) (*ScanResult, error) {
 		paths[i] = file.Path
 	}
 
-	lfs, err := git.lfsPaths(ctx, paths)
-	if err != nil {
-		return nil, err
-	}
+	lfs := git.lfsPaths(ctx, paths)
 
 	inspections := inspectAll(ctx, git.root, tracked, config, lfs)
 
@@ -139,37 +136,14 @@ func (c *Checker) scan(ctx context.Context, dir string) (*ScanResult, error) {
 	flagged := make(map[string]bool)
 
 	for _, inspection := range inspections {
-		ruleID, ok := c.ruleForInspection(inspection)
-		if !ok {
-			if inspection.skip {
-				result.FilesSkipped++
-			} else if inspection.lfs {
-				result.LFSFiles++
-			} else {
-				result.FilesScanned++
-			}
-
-			if inspection.exempt {
-				result.ExemptFiles++
-			}
-
-			continue
+		didFlag, inspectErr := c.collectInspection(config, result, inspection)
+		if inspectErr != nil {
+			return nil, inspectErr
 		}
 
-		result.FilesScanned++
-
-		reason, suppressed := config.SuppressionReason(inspection.file.Path, ruleID)
-		if suppressed {
-			result.Suppressed++
+		if didFlag {
+			flagged[inspection.file.Path] = true
 		}
-
-		item, buildErr := buildFinding(ruleID, inspection, reason)
-		if buildErr != nil {
-			return nil, errorfamily.WrapCorruptionf(buildErr, codeRule, "build finding for %q", ruleID)
-		}
-
-		result.Findings = append(result.Findings, item)
-		flagged[inspection.file.Path] = true
 	}
 
 	for _, path := range trackedIgnored {
@@ -194,6 +168,53 @@ func (c *Checker) scan(ctx context.Context, dir string) (*ScanResult, error) {
 	SortFindings(result.Findings)
 
 	return result, nil
+}
+
+// collectInspection records one inspection in result and reports whether the
+// file produced a finding, so the tracked-ignored pass does not double count it.
+func (c *Checker) collectInspection(
+	config Config,
+	result *ScanResult,
+	inspection fileInspection,
+) (bool, error) {
+	ruleID, matched := c.ruleForInspection(inspection)
+	if !matched {
+		result.accountUnflagged(inspection)
+
+		return false, nil
+	}
+
+	result.FilesScanned++
+
+	reason, suppressed := config.SuppressionReason(inspection.file.Path, ruleID)
+	if suppressed {
+		result.Suppressed++
+	}
+
+	item, buildErr := buildFinding(ruleID, inspection, reason)
+	if buildErr != nil {
+		return false, errorfamily.WrapCorruptionf(buildErr, codeRule, "build finding for %q", ruleID)
+	}
+
+	result.Findings = append(result.Findings, item)
+
+	return true, nil
+}
+
+// accountUnflagged records why an inspection produced no finding.
+func (r *ScanResult) accountUnflagged(inspection fileInspection) {
+	switch {
+	case inspection.skip:
+		r.FilesSkipped++
+	case inspection.lfs:
+		r.LFSFiles++
+	default:
+		r.FilesScanned++
+	}
+
+	if inspection.exempt {
+		r.ExemptFiles++
+	}
 }
 
 // ruleForInspection decides which (if any) rule an inspected file violates.
@@ -233,7 +254,6 @@ func inspectAll(
 	jobs := make(chan int)
 
 	var waitGroup sync.WaitGroup
-
 	for range workers {
 		waitGroup.Go(func() {
 			for index := range jobs {
@@ -310,6 +330,8 @@ func isExemptAsset(relPath string, size int64, config Config) bool {
 	return IsSmallImage(relPath) && config.AllowSmallImagesEnabled() && size <= config.SmallImageCeiling()
 }
 
+// SortFindings orders findings by path, line, then rule so every output format
+// is deterministic regardless of scan order.
 func SortFindings(findings []finding.Finding) {
 	sort.Slice(findings, func(i, j int) bool {
 		left, right := findings[i], findings[j]

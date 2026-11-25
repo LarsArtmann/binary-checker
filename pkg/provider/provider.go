@@ -34,7 +34,7 @@ var Provider = toolsdk.Register(toolsdk.Spec{
 	HealthCheck: gitHealthCheck,
 })
 
-func gitHealthCheck(ctx context.Context) error {
+func gitHealthCheck(_ context.Context) error {
 	if _, err := exec.LookPath("git"); err != nil {
 		return errorfamily.WrapInfrastructuref(
 			err, "binary_checker.git", "binary-check requires git on PATH",

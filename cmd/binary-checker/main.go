@@ -75,57 +75,57 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	threshold, err := parseThreshold(opts.minConfidence)
 	if err != nil {
-		fmt.Fprintf(stderr, "Error: %v\n", err)
-
-		return exitOperational
+		return fail(stderr, err)
 	}
 
 	selected, err := selectRules(allRules, opts.enable, opts.disable)
 	if err != nil {
-		fmt.Fprintf(stderr, "Error: %v\n", err)
-
-		return exitOperational
+		return fail(stderr, err)
 	}
 
 	registry := linter.NewRegistryFromRules(selected, linter.WithToolName(binarycheck.ToolName))
 
 	report, err := registry.Run(context.Background(), opts.dir, linter.ContinueOnError())
 	if err != nil {
-		fmt.Fprintf(stderr, "Error: %v\n", err)
-
-		return exitOperational
+		return fail(stderr, err)
 	}
 
 	scan, err := checker.Scan(context.Background(), opts.dir)
 	if err != nil {
-		fmt.Fprintf(stderr, "Error: %v\n", err)
-
-		return exitOperational
+		return fail(stderr, err)
 	}
 
 	base, err := loadBaseline(opts.baselinePath)
 	if err != nil {
-		fmt.Fprintf(stderr, "Error: %v\n", err)
-
-		return exitOperational
+		return fail(stderr, err)
 	}
 
 	partitions := partition(report, threshold, base)
 
 	if opts.saveBaselinePath != "" {
 		if err := saveBaseline(opts.saveBaselinePath, report.ActiveFindings()); err != nil {
-			fmt.Fprintf(stderr, "Error: %v\n", err)
-
-			return exitOperational
+			return fail(stderr, err)
 		}
 	}
 
 	if err := render(opts, stdout, partitions, scan); err != nil {
-		fmt.Fprintf(stderr, "Error: %v\n", err)
-
-		return exitOperational
+		return fail(stderr, err)
 	}
 
+	return verdictExit(partitions)
+}
+
+// fail reports an operational error and returns the operational exit code.
+func fail(stderr io.Writer, err error) int {
+	fmt.Fprintf(stderr, "Error: %v\n", err)
+
+	return exitOperational
+}
+
+// verdictExit maps the finding partition to the process exit code: actionable
+// findings fail the run, triage-only findings use the distinct triage code so
+// CI can tell a policy decision from a clean tree.
+func verdictExit(partitions reportPartitions) int {
 	switch {
 	case len(partitions.actionable) > 0:
 		return exitFindings
