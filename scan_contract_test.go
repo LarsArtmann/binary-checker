@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	errorfamily "github.com/larsartmann/go-error-family"
+
 	"github.com/larsartmann/binary-checker/internal/gittest"
 )
 
@@ -63,6 +65,12 @@ func TestScanFailsOnCancelledContext(t *testing.T) {
 	result, err := NewChecker().Scan(ctx, dir)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %v, want one wrapping context.Canceled", err)
+	}
+
+	// exec already reports the context error in its chain, so the chain alone
+	// cannot tell "interrupted" from "git failed": the classification must.
+	if errorfamily.Code(err) != codeGitCancelled {
+		t.Fatalf("code = %q, want %q (error: %v)", errorfamily.Code(err), codeGitCancelled, err)
 	}
 
 	if result != nil {
