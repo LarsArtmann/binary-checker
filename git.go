@@ -12,6 +12,10 @@ import (
 
 const codeGit = "binary_checker.git"
 
+// lsStageFields is the number of whitespace-separated fields `git ls-files
+// --stage` emits before the tab-delimited path: mode, object id, and stage.
+const lsStageFields = 3
+
 // ErrNotGitRepository reports that the scan target is not inside a git work
 // tree. Binary checking is defined over git's index, so there is nothing
 // honest to scan without one.
@@ -84,7 +88,7 @@ func (g *gitClient) tracked(ctx context.Context) ([]trackedFile, int, error) {
 		}
 
 		fields := strings.Fields(string(before))
-		if len(fields) < 3 {
+		if len(fields) < lsStageFields {
 			continue
 		}
 

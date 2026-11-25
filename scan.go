@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/larsartmann/go-finding"
 	errorfamily "github.com/larsartmann/go-error-family"
+	"github.com/larsartmann/go-finding"
 )
 
 const (
@@ -235,9 +235,7 @@ func inspectAll(
 	var waitGroup sync.WaitGroup
 
 	for range workers {
-
 		waitGroup.Go(func() {
-
 			for index := range jobs {
 				inspections[index] = inspectFile(ctx, root, files[index], config, lfs)
 			}
@@ -331,7 +329,7 @@ func SortFindings(findings []finding.Finding) {
 func buildFinding(ruleID string, inspection fileInspection, suppressionReason string) (finding.Finding, error) {
 	rule := ruleByID(ruleID)
 	if rule == nil {
-		return finding.Finding{}, errorfamily.Newf(errorfamily.Corruption, 
+		return finding.Finding{}, errorfamily.Newf(errorfamily.Corruption,
 			codeRule, "unknown rule %q while building finding for %q (suppression reason=%q)",
 			ruleID, inspection.file.Path, suppressionReason,
 		)
@@ -374,7 +372,7 @@ func buildFinding(ruleID string, inspection fileInspection, suppressionReason st
 func buildIgnoredFinding(path, suppressionReason string) (finding.Finding, error) {
 	rule := ruleByID(RuleTrackedIgnored)
 	if rule == nil {
-		return finding.Finding{}, errorfamily.Newf(errorfamily.Corruption, 
+		return finding.Finding{}, errorfamily.Newf(errorfamily.Corruption,
 			codeRule, "unknown rule %q while building %q (suppression reason=%q)",
 			RuleTrackedIgnored, path, suppressionReason,
 		)

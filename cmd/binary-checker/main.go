@@ -11,8 +11,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/larsartmann/go-finding"
 	errorfamily "github.com/larsartmann/go-error-family"
+	"github.com/larsartmann/go-finding"
 	linter "github.com/larsartmann/go-linter-sdk"
 
 	binarycheck "github.com/larsartmann/binary-checker"
@@ -222,7 +222,7 @@ func selectRules(all []linter.Rule, enable, disable string) ([]linter.Rule, erro
 
 	for id := range enableSet {
 		if !known[id] {
-			return nil, errorfamily.Newf(errorfamily.Rejection, 
+			return nil, errorfamily.Newf(errorfamily.Rejection,
 				codeCLI, "unknown rule %q (known: %s)", id, strings.Join(binarycheck.AllRuleIDs(), ", "),
 			)
 		}
@@ -230,7 +230,7 @@ func selectRules(all []linter.Rule, enable, disable string) ([]linter.Rule, erro
 
 	for id := range disableSet {
 		if !known[id] {
-			return nil, errorfamily.Newf(errorfamily.Rejection, 
+			return nil, errorfamily.Newf(errorfamily.Rejection,
 				codeCLI, "unknown rule %q (known: %s)", id, strings.Join(binarycheck.AllRuleIDs(), ", "),
 			)
 		}

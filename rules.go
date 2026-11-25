@@ -24,6 +24,15 @@ const (
 	RuleTrackedIgnored = "BC003"
 )
 
+// Finding tags. Shared vocabulary so every rule that concerns git-tracked
+// artifacts carries the same labels.
+const (
+	tagGit           finding.Tag = "git"
+	tagBinary        finding.Tag = "binary"
+	tagBuildArtifact finding.Tag = "build-artifact"
+	tagBestPractice  finding.Tag = "best-practice"
+)
+
 type ruleSpec struct {
 	id          string
 	name        string
@@ -45,7 +54,7 @@ var ruleTable = []*ruleSpec{ //nolint:gochecknoglobals // static rule registry
 		category:    string(linter.CategoryBestPractice),
 		severity:    finding.SeverityError,
 		confidence:  finding.ConfidenceFull,
-		tags:        []finding.Tag{"git", "binary", "build-artifact", "best-practice"},
+		tags:        []finding.Tag{tagGit, tagBinary, tagBuildArtifact, tagBestPractice},
 		message: func(inspection fileInspection) string {
 			message := fmt.Sprintf(
 				"tracked binary file %q (%d bytes; detected by %s)",
@@ -74,7 +83,7 @@ var ruleTable = []*ruleSpec{ //nolint:gochecknoglobals // static rule registry
 		category:    string(linter.CategoryBestPractice),
 		severity:    finding.SeverityWarning,
 		confidence:  finding.ConfidenceMedium,
-		tags:        []finding.Tag{"git", "binary", "build-artifact", "best-practice"},
+		tags:        []finding.Tag{tagGit, tagBinary, tagBuildArtifact, tagBestPractice},
 		message: func(inspection fileInspection) string {
 			return fmt.Sprintf(
 				"tracked file %q matches binary artifact pattern %q but its content reads as text",
@@ -126,7 +135,8 @@ func Rules(checker *Checker) []linter.Rule {
 	rules := make([]linter.Rule, 0, len(ruleTable))
 
 	for _, spec := range ruleTable {
-		rule := checkerRule{checker: checker,
+		rule := checkerRule{
+			checker: checker,
 			Meta: linter.RuleMeta{
 				ID:          spec.id,
 				Name:        spec.name,
@@ -135,7 +145,8 @@ func Rules(checker *Checker) []linter.Rule {
 				Sev:         spec.severity,
 				ToolName:    finding.ToolName(ToolName),
 			},
-			Run: ruleRunner(checker, spec.id)}
+			Run: ruleRunner(checker, spec.id),
+		}
 
 		if spec.optIn {
 			rules = append(rules, optInRule{rule})

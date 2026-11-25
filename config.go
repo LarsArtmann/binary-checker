@@ -156,7 +156,7 @@ func readConfigFile(path string, required bool) (Config, error) {
 	// Reject trailing JSON values: a second object is almost always an
 	// accidental copy-paste, and silently ignoring it hides the mistake.
 	if err := decoder.Decode(new(any)); err != io.EOF {
-		return Config{}, errorfamily.Newf(errorfamily.Rejection, 
+		return Config{}, errorfamily.Newf(errorfamily.Rejection,
 			codeConfig, "parse %q: trailing data after the JSON object", path,
 		)
 	}
@@ -178,7 +178,7 @@ func (c Config) Validate() error {
 		}
 
 		if strings.TrimSpace(entry.Reason) == "" {
-			return errorfamily.Newf(errorfamily.Rejection, 
+			return errorfamily.Newf(errorfamily.Rejection,
 				codeConfig,
 				"ignore[%d] (%s) must state a reason: an unexplained ignore outlives its justification",
 				i,
@@ -188,7 +188,7 @@ func (c Config) Validate() error {
 
 		for _, rule := range entry.Rules {
 			if !knownRules[rule] {
-				return errorfamily.Newf(errorfamily.Rejection, 
+				return errorfamily.Newf(errorfamily.Rejection,
 					codeConfig, "ignore[%d] (%s) names unknown rule %q", i, entry.Path, rule,
 				)
 			}

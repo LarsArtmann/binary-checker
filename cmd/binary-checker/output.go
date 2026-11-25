@@ -1,14 +1,13 @@
 package main
 
 import (
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
 	"io"
 
-	"encoding/json/jsontext"
-
-	"github.com/larsartmann/go-finding"
 	errorfamily "github.com/larsartmann/go-error-family"
+	"github.com/larsartmann/go-finding"
 
 	binarycheck "github.com/larsartmann/binary-checker"
 )

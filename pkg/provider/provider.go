@@ -13,9 +13,9 @@ import (
 	"os/exec"
 	"sort"
 
+	errorfamily "github.com/larsartmann/go-error-family"
 	"github.com/larsartmann/go-finding"
 	toolsdk "github.com/larsartmann/go-finding/toolsdk"
-	errorfamily "github.com/larsartmann/go-error-family"
 	linter "github.com/larsartmann/go-linter-sdk"
 
 	binarycheck "github.com/larsartmann/binary-checker"

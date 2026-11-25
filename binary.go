@@ -2,6 +2,7 @@ package binarycheck
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"unicode"
@@ -41,7 +42,7 @@ func ReadSample(path string) ([]byte, error) {
 	buffer := make([]byte, SampleSize)
 
 	read, err := io.ReadFull(file, buffer)
-	if err != nil && err != io.ErrUnexpectedEOF && err != io.EOF {
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
 		return nil, err
 	}
 
