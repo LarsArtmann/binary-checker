@@ -2,58 +2,12 @@ package provider
 
 import (
 	"context"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"testing"
 
 	"github.com/larsartmann/go-finding"
+
+	"github.com/larsartmann/binary-checker/internal/gittest"
 )
-
-func newGitRepo(t *testing.T) string {
-	t.Helper()
-
-	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(t.TempDir(), "gitconfig"))
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-
-	dir := t.TempDir()
-
-	gitRun(t, dir, "init", "-q")
-	gitRun(t, dir, "config", "user.email", "test@example.com")
-	gitRun(t, dir, "config", "user.name", "Test")
-
-	return dir
-}
-
-func gitRun(t *testing.T, dir string, args ...string) {
-	t.Helper()
-
-	command := exec.Command("git", append([]string{"-C", dir}, args...)...)
-
-	output, err := command.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, output)
-	}
-}
-
-func writeRepoFile(t *testing.T, dir, rel string, data []byte) {
-	t.Helper()
-
-	absolute := filepath.Join(dir, filepath.FromSlash(rel))
-	if err := os.MkdirAll(filepath.Dir(absolute), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := os.WriteFile(absolute, data, 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func addRepoFiles(t *testing.T, dir string, rels ...string) {
-	t.Helper()
-
-	gitRun(t, dir, append([]string{"add", "-f"}, rels...)...)
-}
 
 func TestProviderSpec(t *testing.T) {
 	t.Parallel()
@@ -76,9 +30,9 @@ func TestProviderSpec(t *testing.T) {
 }
 
 func TestDetectReportsTrackedBinary(t *testing.T) {
-	dir := newGitRepo(t)
-	writeRepoFile(t, dir, "blob.bin", []byte{0x00, 0x01, 0x02})
-	addRepoFiles(t, dir, "blob.bin")
+	dir := gittest.NewRepo(t)
+	gittest.WriteFile(t, dir, "blob.bin", []byte{0x00, 0x01, 0x02})
+	gittest.AddFiles(t, dir, "blob.bin")
 
 	ctx := finding.WithWorkingDir(context.Background(), dir)
 
@@ -97,12 +51,12 @@ func TestDetectReportsTrackedBinary(t *testing.T) {
 }
 
 func TestDetectDropsConfigSuppressedFindings(t *testing.T) {
-	dir := newGitRepo(t)
-	writeRepoFile(t, dir, ".binary-checker.json", []byte(
+	dir := gittest.NewRepo(t)
+	gittest.WriteFile(t, dir, ".binary-checker.json", []byte(
 		`{"ignore":[{"path":"blob.bin","reason":"fixture"}]}`,
 	))
-	writeRepoFile(t, dir, "blob.bin", []byte{0x00, 0x01})
-	addRepoFiles(t, dir, ".binary-checker.json", "blob.bin")
+	gittest.WriteFile(t, dir, "blob.bin", []byte{0x00, 0x01})
+	gittest.AddFiles(t, dir, ".binary-checker.json", "blob.bin")
 
 	ctx := finding.WithWorkingDir(context.Background(), dir)
 

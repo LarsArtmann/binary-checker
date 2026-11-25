@@ -4,60 +4,13 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/larsartmann/go-finding"
+
+	"github.com/larsartmann/binary-checker/internal/gittest"
 )
-
-func newGitRepo(t *testing.T) string {
-	t.Helper()
-
-	emptyConfig := filepath.Join(t.TempDir(), "gitconfig")
-
-	t.Setenv("GIT_CONFIG_GLOBAL", emptyConfig)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-
-	dir := t.TempDir()
-
-	gitRun(t, dir, "init", "-q")
-	gitRun(t, dir, "config", "user.email", "test@example.com")
-	gitRun(t, dir, "config", "user.name", "Test")
-
-	return dir
-}
-
-func gitRun(t *testing.T, dir string, args ...string) {
-	t.Helper()
-
-	command := exec.Command("git", append([]string{"-C", dir}, args...)...)
-
-	output, err := command.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, output)
-	}
-}
-
-func writeRepoFile(t *testing.T, dir, rel string, data []byte) {
-	t.Helper()
-
-	absolute := filepath.Join(dir, filepath.FromSlash(rel))
-	if err := os.MkdirAll(filepath.Dir(absolute), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := os.WriteFile(absolute, data, 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func addRepoFiles(t *testing.T, dir string, rels ...string) {
-	t.Helper()
-
-	args := append([]string{"add", "-f"}, rels...)
-	gitRun(t, dir, args...)
-}
 
 func scanRepo(t *testing.T, dir string) *ScanResult {
 	t.Helper()
@@ -85,11 +38,11 @@ func findingsByRule(result *ScanResult, ruleID string) []finding.Finding {
 }
 
 func TestScanDetectsTrackedBinaryContent(t *testing.T) {
-	dir := newGitRepo(t)
+	dir := gittest.NewRepo(t)
 
-	writeRepoFile(t, dir, "README.md", []byte("hello\n"))
-	writeRepoFile(t, dir, "blob.bin", []byte{0x00, 0x01, 0x02, 0x03})
-	addRepoFiles(t, dir, "README.md", "blob.bin")
+	gittest.WriteFile(t, dir, "README.md", []byte("hello\n"))
+	gittest.WriteFile(t, dir, "blob.bin", []byte{0x00, 0x01, 0x02, 0x03})
+	gittest.AddFiles(t, dir, "README.md", "blob.bin")
 
 	result := scanRepo(t, dir)
 
@@ -121,10 +74,10 @@ func TestScanDetectsTrackedBinaryContent(t *testing.T) {
 }
 
 func TestScanFlagsBinaryExtensionWithTextContent(t *testing.T) {
-	dir := newGitRepo(t)
+	dir := gittest.NewRepo(t)
 
-	writeRepoFile(t, dir, "archive.zip", []byte("this is not really a zip file"))
-	addRepoFiles(t, dir, "archive.zip")
+	gittest.WriteFile(t, dir, "archive.zip", []byte("this is not really a zip file"))
+	gittest.AddFiles(t, dir, "archive.zip")
 
 	result := scanRepo(t, dir)
 
@@ -144,18 +97,18 @@ func TestScanFlagsBinaryExtensionWithTextContent(t *testing.T) {
 }
 
 func TestScanExemptsSmallAssetsAndFlagsOversizedOnes(t *testing.T) {
-	dir := newGitRepo(t)
+	dir := gittest.NewRepo(t)
 
 	smallPNG := append([]byte{0x89, 'P', 'N', 'G', 0x1a, '\n', 0x00}, make([]byte, 16)...)
 	bigPNG := append([]byte{0x89, 'P', 'N', 'G', 0x1a, '\n', 0x00}, make([]byte, DefaultSmallImageMaxBytes)...)
 	smallFont := []byte{0x77, 'O', 'F', '2', 0x00, 0x01}
 	bigFont := append([]byte{0x77, 'O', 'F', '2', 0x00, 0x01}, make([]byte, DefaultFontMaxBytes)...)
 
-	writeRepoFile(t, dir, "assets/small.png", smallPNG)
-	writeRepoFile(t, dir, "assets/big.png", bigPNG)
-	writeRepoFile(t, dir, "assets/small.woff2", smallFont)
-	writeRepoFile(t, dir, "assets/big.woff2", bigFont)
-	addRepoFiles(t, dir, "assets")
+	gittest.WriteFile(t, dir, "assets/small.png", smallPNG)
+	gittest.WriteFile(t, dir, "assets/big.png", bigPNG)
+	gittest.WriteFile(t, dir, "assets/small.woff2", smallFont)
+	gittest.WriteFile(t, dir, "assets/big.woff2", bigFont)
+	gittest.AddFiles(t, dir, "assets")
 
 	result := scanRepo(t, dir)
 
@@ -178,11 +131,11 @@ func TestScanExemptsSmallAssetsAndFlagsOversizedOnes(t *testing.T) {
 }
 
 func TestScanSkipsGitLFSFiles(t *testing.T) {
-	dir := newGitRepo(t)
+	dir := gittest.NewRepo(t)
 
-	writeRepoFile(t, dir, ".gitattributes", []byte("*.psd filter=lfs diff=lfs merge=lfs -text\n"))
-	writeRepoFile(t, dir, "design/source.psd", []byte{0x38, 0x42, 0x50, 0x53, 0x00, 0x01})
-	addRepoFiles(t, dir, ".gitattributes", "design/source.psd")
+	gittest.WriteFile(t, dir, ".gitattributes", []byte("*.psd filter=lfs diff=lfs merge=lfs -text\n"))
+	gittest.WriteFile(t, dir, "design/source.psd", []byte{0x38, 0x42, 0x50, 0x53, 0x00, 0x01})
+	gittest.AddFiles(t, dir, ".gitattributes", "design/source.psd")
 
 	result := scanRepo(t, dir)
 
@@ -196,15 +149,15 @@ func TestScanSkipsGitLFSFiles(t *testing.T) {
 }
 
 func TestScanSkipsSymlinks(t *testing.T) {
-	dir := newGitRepo(t)
+	dir := gittest.NewRepo(t)
 
-	writeRepoFile(t, dir, "README.md", []byte("hello\n"))
+	gittest.WriteFile(t, dir, "README.md", []byte("hello\n"))
 
 	if err := os.Symlink("README.md", filepath.Join(dir, "alias.bin")); err != nil {
 		t.Fatal(err)
 	}
 
-	addRepoFiles(t, dir, "README.md", "alias.bin")
+	gittest.AddFiles(t, dir, "README.md", "alias.bin")
 
 	result := scanRepo(t, dir)
 
@@ -220,11 +173,11 @@ func TestScanSkipsSymlinks(t *testing.T) {
 }
 
 func TestScanReportsTrackedButIgnored(t *testing.T) {
-	dir := newGitRepo(t)
+	dir := gittest.NewRepo(t)
 
-	writeRepoFile(t, dir, ".gitignore", []byte("*.log\n"))
-	writeRepoFile(t, dir, "debug.log", []byte("debug\n"))
-	addRepoFiles(t, dir, ".gitignore", "debug.log")
+	gittest.WriteFile(t, dir, ".gitignore", []byte("*.log\n"))
+	gittest.WriteFile(t, dir, "debug.log", []byte("debug\n"))
+	gittest.AddFiles(t, dir, ".gitignore", "debug.log")
 
 	result := scanRepo(t, dir)
 
@@ -239,13 +192,13 @@ func TestScanReportsTrackedButIgnored(t *testing.T) {
 }
 
 func TestScanAppliesConfigSuppression(t *testing.T) {
-	dir := newGitRepo(t)
+	dir := gittest.NewRepo(t)
 
-	writeRepoFile(t, dir, DefaultConfigName, []byte(
+	gittest.WriteFile(t, dir, DefaultConfigName, []byte(
 		`{"ignore":[{"path":"fixtures/**","reason":"binary fixture corpus"}]}`,
 	))
-	writeRepoFile(t, dir, "fixtures/sample.bin", []byte{0x00, 0x01})
-	addRepoFiles(t, dir, DefaultConfigName, "fixtures/sample.bin")
+	gittest.WriteFile(t, dir, "fixtures/sample.bin", []byte{0x00, 0x01})
+	gittest.AddFiles(t, dir, DefaultConfigName, "fixtures/sample.bin")
 
 	result := scanRepo(t, dir)
 
@@ -277,12 +230,12 @@ func TestScanRejectsNonGitDirectory(t *testing.T) {
 }
 
 func TestScanOrdersFindingsDeterministically(t *testing.T) {
-	dir := newGitRepo(t)
+	dir := gittest.NewRepo(t)
 
-	writeRepoFile(t, dir, "b.bin", []byte{0x00})
-	writeRepoFile(t, dir, "a.bin", []byte{0x00})
-	writeRepoFile(t, dir, "c.zip", []byte("not a zip"))
-	addRepoFiles(t, dir, "b.bin", "a.bin", "c.zip")
+	gittest.WriteFile(t, dir, "b.bin", []byte{0x00})
+	gittest.WriteFile(t, dir, "a.bin", []byte{0x00})
+	gittest.WriteFile(t, dir, "c.zip", []byte("not a zip"))
+	gittest.AddFiles(t, dir, "b.bin", "a.bin", "c.zip")
 
 	result := scanRepo(t, dir)
 
@@ -299,9 +252,9 @@ func TestScanOrdersFindingsDeterministically(t *testing.T) {
 }
 
 func TestCheckerMemoizesScans(t *testing.T) {
-	dir := newGitRepo(t)
-	writeRepoFile(t, dir, "blob.bin", []byte{0x00})
-	addRepoFiles(t, dir, "blob.bin")
+	dir := gittest.NewRepo(t)
+	gittest.WriteFile(t, dir, "blob.bin", []byte{0x00})
+	gittest.AddFiles(t, dir, "blob.bin")
 
 	checker := NewChecker()
 

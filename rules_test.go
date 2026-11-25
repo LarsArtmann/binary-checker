@@ -6,6 +6,8 @@ import (
 
 	"github.com/larsartmann/go-finding"
 	linter "github.com/larsartmann/go-linter-sdk"
+
+	"github.com/larsartmann/binary-checker/internal/gittest"
 )
 
 func TestRuleIDsAreStable(t *testing.T) {
@@ -26,10 +28,10 @@ func TestRuleIDsAreStable(t *testing.T) {
 }
 
 func TestDefaultRegistryExcludesOptInRule(t *testing.T) {
-	dir := newGitRepo(t)
-	writeRepoFile(t, dir, ".gitignore", []byte("*.log\n"))
-	writeRepoFile(t, dir, "debug.log", []byte("debug\n"))
-	addRepoFiles(t, dir, ".gitignore", "debug.log")
+	dir := gittest.NewRepo(t)
+	gittest.WriteFile(t, dir, ".gitignore", []byte("*.log\n"))
+	gittest.WriteFile(t, dir, "debug.log", []byte("debug\n"))
+	gittest.AddFiles(t, dir, ".gitignore", "debug.log")
 
 	registry := NewRegistry(NewChecker())
 
@@ -48,10 +50,10 @@ func TestDefaultRegistryExcludesOptInRule(t *testing.T) {
 }
 
 func TestOptInRuleRunsWhenSelected(t *testing.T) {
-	dir := newGitRepo(t)
-	writeRepoFile(t, dir, ".gitignore", []byte("*.log\n"))
-	writeRepoFile(t, dir, "debug.log", []byte("debug\n"))
-	addRepoFiles(t, dir, ".gitignore", "debug.log")
+	dir := gittest.NewRepo(t)
+	gittest.WriteFile(t, dir, ".gitignore", []byte("*.log\n"))
+	gittest.WriteFile(t, dir, "debug.log", []byte("debug\n"))
+	gittest.AddFiles(t, dir, ".gitignore", "debug.log")
 
 	checker := NewChecker()
 	all := Rules(checker)
