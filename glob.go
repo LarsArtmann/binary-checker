@@ -47,12 +47,22 @@ func normalizePattern(value string) string {
 	return strings.TrimPrefix(value, "/")
 }
 
+// hasDirPrefix reports whether relPath is the directory named by dir or lies
+// beneath a directory matching dir. Every ancestor of relPath is tried, so the
+// directory segment may itself contain globs ("*.app/", "build-*/").
 func hasDirPrefix(relPath, dir string) bool {
-	if MatchPath(dir, relPath) {
-		return true
-	}
+	for end := len(relPath); ; {
+		if MatchPath(dir, relPath[:end]) {
+			return true
+		}
 
-	return strings.HasPrefix(relPath, dir+"/") || strings.Contains(relPath, "/"+dir+"/")
+		slash := strings.LastIndexByte(relPath[:end], '/')
+		if slash < 0 {
+			return false
+		}
+
+		end = slash
+	}
 }
 
 // matchSegments matches pattern segments against path segments with `**`
