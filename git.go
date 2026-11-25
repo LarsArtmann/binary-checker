@@ -45,12 +45,16 @@ func newGitClient(ctx context.Context, dir string) (*gitClient, error) {
 func discoverGitRoot(ctx context.Context, dir string) (string, error) {
 	output, err := runGit(ctx, dir, "rev-parse", "--show-toplevel")
 	if err != nil {
-		return "", errorfamily.WrapInfrastructuref(err, codeGit, "discover work tree for %q", dir)
+		return "", errorfamily.WrapInfrastructuref(
+			err, codeGit, "not a git repository (or any parent up to %q)", dir,
+		)
 	}
 
 	root := strings.TrimSpace(string(output))
 	if root == "" {
-		return "", errorfamily.WrapInfrastructuref(ErrNotGitRepository, codeGit, "discover work tree for %q", dir)
+		return "", errorfamily.WrapInfrastructuref(
+			ErrNotGitRepository, codeGit, "not a git repository (or any parent up to %q)", dir,
+		)
 	}
 
 	return filepath.Clean(root), nil

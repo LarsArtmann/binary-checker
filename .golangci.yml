@@ -1,0 +1,125 @@
+version: "2"
+
+run:
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - copyloopvar
+    - cyclop
+    - dupl
+    - errcheck
+    - errorlint
+    - exhaustive
+    - funlen
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - goprintffuncname
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - mnd
+    - nakedret
+    - nestif
+    - nilerr
+    - noctx
+    - nolintlint
+    - prealloc
+    - predeclared
+    - revive
+    - staticcheck
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - unused
+    - usestdlibvars
+    - whitespace
+  settings:
+    cyclop:
+      max-complexity: 15
+    dupl:
+      threshold: 120
+    funlen:
+      lines: 120
+      statements: 60
+    gocognit:
+      min-complexity: 25
+    gocyclo:
+      min-complexity: 15
+    godot:
+      scope: declarations
+    gosec:
+      excludes:
+        # Path traversal is the tool's whole job: it walks the git index.
+        - G304
+    mnd:
+      ignored-numbers:
+        - "0"
+        - "1"
+        - "2"
+        - "0o600"
+        - "0o755"
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: early-return
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: exported
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: superfluous-else
+        - name: time-naming
+        - name: unexported-return
+        - name: unreachable-code
+        - name: unused-parameter
+        - name: var-declaration
+        - name: var-naming
+  exclusions:
+    rules:
+      # Test fixtures deliberately repeat setup prose and use long tables.
+      - path: _test\.go
+        linters:
+          - cyclop
+          - dupl
+          - funlen
+          - gocognit
+          - goconst
+          - gosec
+          - mnd
+          - noctx
+      # The CLI entrypoint prints diagnostics; a dead stream has no recovery.
+      - path: cmd/binary-checker
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - gci
+    - gofumpt
+    - goimports
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/larsartmann/binary-checker)
+    gofumpt:
+      module-path: github.com/larsartmann/binary-checker

@@ -91,22 +91,37 @@ func (c Config) SmallImageCeiling() int64 {
 // directory and MUST exist. Otherwise DefaultConfigName is looked up at the git
 // root; absence yields defaults, not an error.
 func LoadConfig(explicitPath, root string) (Config, error) {
-	path := explicitPath
-
-	if path == "" {
-		path = filepath.Join(root, DefaultConfigName)
-	} else if !filepath.IsAbs(path) {
-		absolute, err := filepath.Abs(path)
-		if err != nil {
-			return Config{}, errorfamily.WrapRejectionf(
-				err, codeConfig, "resolve explicit config path %q", path,
-			)
-		}
-
-		path = absolute
+	path, err := resolveConfigPath(explicitPath, root)
+	if err != nil {
+		return Config{}, err
 	}
 
-	config, err := readConfigFile(path, explicitPath != "")
+	return loadConfigFile(path, explicitPath != "")
+}
+
+// resolveConfigPath turns the --config flag (or its absence) into an absolute
+// path. An empty explicitPath means the default name at the git root.
+func resolveConfigPath(explicitPath, root string) (string, error) {
+	if explicitPath == "" {
+		return filepath.Join(root, DefaultConfigName), nil
+	}
+
+	if filepath.IsAbs(explicitPath) {
+		return explicitPath, nil
+	}
+
+	absolute, err := filepath.Abs(explicitPath)
+	if err != nil {
+		return "", errorfamily.WrapRejectionf(
+			err, codeConfig, "resolve explicit config path %q", explicitPath,
+		)
+	}
+
+	return absolute, nil
+}
+
+func loadConfigFile(path string, required bool) (Config, error) {
+	config, err := readConfigFile(path, required)
 	if err != nil {
 		return Config{}, errorfamily.WrapRejectionf(err, codeConfig, "read config %q", path)
 	}
