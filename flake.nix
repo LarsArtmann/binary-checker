@@ -21,16 +21,7 @@
         fileset = lib.fileset.unions [
           ./go.mod
           ./go.sum
-          ./binary.go
-          ./config.go
-          ./doc.go
-          ./git.go
-          ./glob.go
-          ./patterns.go
-          ./rules.go
-          ./scan.go
-          ./cmd
-          ./pkg
+          (lib.fileset.fileFilter (file: lib.hasSuffix ".go" file.name) ./.)
         ];
       };
     in
@@ -59,7 +50,10 @@
               "-X main.version=${version}"
             ];
 
-            doCheck = false;
+            # The suite shells out to git to build fixture repositories, so the
+            # test phase needs git on PATH.
+            nativeCheckInputs = [ pkgs.git ];
+            doCheck = true;
 
             meta = {
               description = "Reports git-tracked binary files that should not be committed";
@@ -90,7 +84,7 @@
 
             shellHook = ''
               export GOEXPERIMENT=jsonv2
-              export GOTOOLCHAIN=go1.27.1
+              export GOTOOLCHAIN=local
             '';
           };
         }
