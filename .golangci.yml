@@ -65,6 +65,7 @@ linters:
         - "1"
         - "2"
         - "0o600"
+        - "0o750"
         - "0o755"
     nolintlint:
       require-explanation: true

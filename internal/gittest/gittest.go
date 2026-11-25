@@ -7,6 +7,7 @@
 package gittest
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,7 +41,7 @@ func Run(t *testing.T, dir string, args ...string) {
 	t.Helper()
 
 	// #nosec G204 -- args are test-authored literals, never user input.
-	command := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	command := exec.CommandContext(context.Background(), "git", append([]string{"-C", dir}, args...)...)
 
 	output, err := command.CombinedOutput()
 	if err != nil {
@@ -54,7 +55,7 @@ func WriteFile(t *testing.T, dir, rel string, data []byte) {
 	t.Helper()
 
 	absolute := filepath.Join(dir, filepath.FromSlash(rel))
-	if err := os.MkdirAll(filepath.Dir(absolute), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(absolute), 0o750); err != nil {
 		t.Fatal(err)
 	}
 
