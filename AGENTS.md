@@ -65,7 +65,7 @@ every `.go` file, which is what keeps the root test files in the build.
 ## Release and BuildFlow pin (durable integration)
 
 **Forgejo is canonical; GitHub is the mirror.** The fleet's Forgejo at
-`forgejo.home.lan` syncs *from* GitHub, so a brand-new repository appears there
+`forgejo.home.lan` syncs _from_ GitHub, so a brand-new repository appears there
 as a read-only mirror first; promoting it to a native Forgejo repo is a separate
 flip. Locally: `origin` = Forgejo, `github` = named fallback.
 

@@ -22,7 +22,7 @@ Honest inventory by status.
   filtering.
 - Unit and integration tests, including real throwaway git repositories and a
   mutation-proofed detection suite.
-- Nix packaging: `nix build` compiles the binary *and* runs the whole test
+- Nix packaging: `nix build` compiles the binary _and_ runs the whole test
   suite in the sandbox; `vendorHash` is pinned for the current dependency set.
 - golangci-lint gate (36 linters, gofumpt/gci/goimports formatters) at zero
   findings, plus erraudit error-handling audit at zero violations.
