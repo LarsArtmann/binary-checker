@@ -22,12 +22,16 @@ Honest inventory by status.
   filtering.
 - Unit and integration tests, including real throwaway git repositories and a
   mutation-proofed detection suite.
+- Nix packaging: `nix build` compiles the binary *and* runs the whole test
+  suite in the sandbox; `vendorHash` is pinned for the current dependency set.
+- golangci-lint gate (36 linters, gofumpt/gci/goimports formatters) at zero
+  findings, plus erraudit error-handling audit at zero violations.
+- CI on both hosts (`.forgejo/workflows/ci.yml`, `.github/workflows/ci.yml`):
+  build, vet, race tests, lint, nix build.
 
 ## PARTIALLY DONE
 
-- Nix packaging: `flake.nix` exists; `vendorHash` is pinned for the current
-  dependency set and must be refreshed by `nix run .#update-vendor-hash` after
-  dependency changes.
+- Nothing outstanding.
 
 ## PLANNED
 

@@ -147,7 +147,12 @@ func render(opts options, stdout io.Writer, partitions reportPartitions, scan *b
 	case "sarif":
 		return renderSARIF(stdout, partitions)
 	default:
-		return errorfamily.Newf(errorfamily.Rejection, codeCLI, "unknown format %q (want human, json, or sarif)", opts.format)
+		return errorfamily.Newf(
+			errorfamily.Rejection,
+			codeCLI,
+			"unknown format %q (want human, json, or sarif)",
+			opts.format,
+		)
 	}
 }
 
@@ -158,7 +163,12 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.SetOutput(stderr)
 
 	flags.StringVar(&opts.format, "format", "human", "output format: human, json, or sarif")
-	flags.StringVar(&opts.minConfidence, "min-confidence", "high", "minimum confidence for actionable findings (low, medium, high, full)")
+	flags.StringVar(
+		&opts.minConfidence,
+		"min-confidence",
+		"high",
+		"minimum confidence for actionable findings (low, medium, high, full)",
+	)
 	flags.StringVar(&opts.enable, "enable", "", "comma-separated rule IDs to run (default: enabled rules only)")
 	flags.StringVar(&opts.disable, "disable", "", "comma-separated rule IDs to skip")
 	flags.StringVar(&opts.configPath, "config", "", "config file path (default: .binary-checker.json at the git root)")
@@ -186,13 +196,23 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	case 1:
 		opts.dir = flags.Arg(0)
 	default:
-		return opts, errorfamily.Newf(errorfamily.Rejection, codeCLI, "expected at most one directory argument, got %d", flags.NArg())
+		return opts, errorfamily.Newf(
+			errorfamily.Rejection,
+			codeCLI,
+			"expected at most one directory argument, got %d",
+			flags.NArg(),
+		)
 	}
 
 	switch opts.format {
 	case "human", "json", "sarif":
 	default:
-		return opts, errorfamily.Newf(errorfamily.Rejection, codeCLI, "unknown format %q (want human, json, or sarif)", opts.format)
+		return opts, errorfamily.Newf(
+			errorfamily.Rejection,
+			codeCLI,
+			"unknown format %q (want human, json, or sarif)",
+			opts.format,
+		)
 	}
 
 	return opts, nil

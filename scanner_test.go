@@ -102,6 +102,7 @@ func TestScanExemptsSmallAssetsAndFlagsOversizedOnes(t *testing.T) {
 	smallPNG := append([]byte{0x89, 'P', 'N', 'G', 0x1a, '\n', 0x00}, make([]byte, 16)...)
 	bigPNG := append([]byte{0x89, 'P', 'N', 'G', 0x1a, '\n', 0x00}, make([]byte, DefaultSmallImageMaxBytes)...)
 	smallFont := []byte{0x77, 'O', 'F', '2', 0x00, 0x01}
+
 	bigFont := append([]byte{0x77, 'O', 'F', '2', 0x00, 0x01}, make([]byte, DefaultFontMaxBytes)...)
 
 	gittest.WriteFile(t, dir, "assets/small.png", smallPNG)

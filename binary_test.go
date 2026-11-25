@@ -15,7 +15,12 @@ func TestClassifyContent(t *testing.T) {
 		{name: "ascii text", sample: []byte("hello, world\n"), binary: false},
 		{name: "utf8 text", sample: []byte("héllo wörld — 日本語\n"), binary: false},
 		{name: "nul byte", sample: []byte{'a', 0, 'b'}, binary: true, evidence: "nul-byte"},
-		{name: "png header", sample: []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0}, binary: true, evidence: "nul-byte"},
+		{
+			name:     "png header",
+			sample:   []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0},
+			binary:   true,
+			evidence: "nul-byte",
+		},
 		{
 			name:     "control heavy",
 			sample:   []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 'a', 'b'},

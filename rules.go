@@ -178,6 +178,7 @@ func NewRegistry(checker *Checker) *linter.Registry {
 
 type checkerRule struct {
 	linter.RuleFunc
+
 	checker *Checker
 }
 

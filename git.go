@@ -165,7 +165,10 @@ func runGit(ctx context.Context, dir string, args ...string) ([]byte, error) {
 }
 
 func runGitWithInput(ctx context.Context, dir, input string, args ...string) ([]byte, error) {
-	command := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...) //nolint:gosec // fixed git subcommand, paths are repository data
+	command := exec.CommandContext(
+		ctx,
+		"git",
+		append([]string{"-C", dir}, args...)...)
 	command.Env = append(command.Environ(), "LC_ALL=C")
 
 	if input != "" {

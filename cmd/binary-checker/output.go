@@ -93,6 +93,7 @@ func renderHuman(
 	scanned := 0
 
 	exempt := 0
+
 	if scan != nil {
 		scanned = scan.FilesScanned
 		exempt = scan.ExemptFiles

@@ -8,9 +8,14 @@ rewrites the index. Runs standalone and as a BuildFlow toolsdk provider.
 ```bash
 GOEXPERIMENT=jsonv2 go test -race ./...
 GOEXPERIMENT=jsonv2 go vet ./...
+GOEXPERIMENT=jsonv2 golangci-lint run ./...   # the gate; 0 issues is the bar
 GOEXPERIMENT=jsonv2 go run ./cmd/binary-checker .
-nix build .
+nix build .                                   # builds AND runs the test suite
 ```
+
+`nix build` runs `go test ./...` inside the sandbox (`doCheck = true`), so a
+green build means the tests passed too. The flake's source fileset selects
+every `.go` file, which is what keeps the root test files in the build.
 
 ## Layout
 
@@ -24,6 +29,7 @@ nix build .
 | `scan.go`                  | Checker: git walk, parallel inspection, finding construction |
 | `rules.go`                 | Stable rule IDs, `RuleFunc` wiring, registry construction    |
 | `pkg/provider/provider.go` | `toolsdk.Register` — BuildFlow self-registration             |
+| `internal/gittest/`        | Shared throwaway-repo fixtures for every test package        |
 | `cmd/binary-checker/`      | CLI: flags, human/JSON/SARIF output, baseline                |
 
 ## Invariants
@@ -47,7 +53,9 @@ nix build .
 ## Testing discipline
 
 - Every rule has positive and negative fixtures (`scanner_test.go`).
-- Global git config is isolated in tests; never rely on the developer's config.
+- Build fixture repositories through `internal/gittest`; never hand-roll git
+  setup in a test. Global git config is isolated there so the developer's
+  aliases and signing requirements cannot change outcomes.
 - Mutation-proof the suite when changing detection: revert the fix (or plant a
   broken predicate), confirm the exact symptom fails, restore, confirm green.
   A compile-clean mutant is required; an unused-import failure proves nothing.
@@ -56,11 +64,18 @@ nix build .
 
 ## Release and BuildFlow pin (durable integration)
 
+**Forgejo is canonical; GitHub is the mirror.** The fleet's Forgejo at
+`forgejo.home.lan` syncs *from* GitHub, so a brand-new repository appears there
+as a read-only mirror first; promoting it to a native Forgejo repo is a separate
+flip. Locally: `origin` = Forgejo, `github` = named fallback.
+
 BuildFlow consumes this repo as a flake input + prepared-source dependency:
 
-1. Tag `vX.Y.Z` on a green commit and push.
+1. Tag `vX.Y.Z` on a green commit and push to both remotes.
 2. In BuildFlow `flake.nix`: add
-   `binary-checker = { url = "git+ssh://git@github.com/LarsArtmann/binary-checker?ref=refs/tags/vX.Y.Z"; flake = false; };`
+   `binary-checker = { url = "git+ssh://forgejo@forgejo.home.lan/lars/binary-checker.git?ref=refs/tags/vX.Y.Z"; flake = false; };`
+   (tag-pinned, never `ref=master`; the GitHub URL is the fallback if the
+   Forgejo host is unreachable from CI).
 3. Add `"github.com/larsartmann/binary-checker" = inputs.binary-checker;` to
    `preparedSrc.deps` (root module carries `pkg/provider`, so no `subModules`
    entry is needed).
