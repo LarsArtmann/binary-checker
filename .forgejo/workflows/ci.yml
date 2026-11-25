@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    # The host-mode runner does not check out into the step's default working
+    # directory; the repository lives at GITHUB_WORKSPACE.
+    working-directory: ${{ gitea.workspace }}
+
 jobs:
   check:
     # The self-hosted runner exposes the `native` label (host backend) and runs
