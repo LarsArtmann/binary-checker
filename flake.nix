@@ -42,7 +42,10 @@
             # Updated via `nix run .#update-vendor-hash` after dependency changes.
             vendorHash = "sha256-v/lROA2BuaJLACbHlUpSJUFbQoQ7ow115ycqm0SZyK0=";
 
-            subPackages = [ "cmd/binary-checker" ];
+            # No subPackages: the module has a single main package, and
+            # buildGoModule only runs `go test` for subPackages when the list
+            # is non-empty. Leaving it unset makes the check phase cover every
+            # package, including the library.
 
             ldflags = [
               "-s"
