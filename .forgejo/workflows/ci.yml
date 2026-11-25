@@ -11,16 +11,11 @@ permissions:
 
 jobs:
   check:
-    # The self-hosted runner exposes the `native` label (host backend) and executes steps
-    # directly on the host, so the workflow uses the host toolchain instead of
-    # container-only GitHub actions.
+    # The self-hosted runner exposes the `native` label (host backend) and runs
+    # steps directly on the host. Its PATH carries Go but not every tool, so
+    # each step resolves its binary with an explicit fallback.
     runs-on: native
     steps:
-      - name: Toolchain
-        run: |
-          go version
-          golangci-lint --version
-
       - name: Build and vet
         run: |
           go build ./...
@@ -30,10 +25,14 @@ jobs:
         run: go test -race -count=1 ./...
 
       - name: Lint
-        run: golangci-lint run ./...
+        run: |
+          lint="$(command -v golangci-lint || echo /run/current-system/sw/bin/golangci-lint)"
+          "$lint" run ./...
 
       - name: Nix build (compiles and runs the suite in the sandbox)
-        run: nix build . --print-build-logs
+        run: |
+          nix_bin="$(command -v nix || echo /run/current-system/sw/bin/nix)"
+          "$nix_bin" build . --print-build-logs
 
       - name: Self-scan
         run: go run ./cmd/binary-checker .
