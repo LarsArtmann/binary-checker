@@ -45,12 +45,15 @@ type gitCondition struct {
 	family errorfamily.Family
 }
 
-var (
-	// gitNoWorkTree: the target is not inside a git work tree.
-	gitNoWorkTree = gitCondition{code: codeGitNotRepository, family: errorfamily.Rejection}
-	// gitQueryFailed: git could not answer a query it normally answers.
-	gitQueryFailed = gitCondition{code: codeGitFailed, family: errorfamily.Infrastructure}
-)
+// gitNoWorkTree: the target is not inside a git work tree.
+var gitNoWorkTree = gitCondition{ //nolint:gochecknoglobals // a fixed condition descriptor; it holds no state
+	code: codeGitNotRepository, family: errorfamily.Rejection,
+}
+
+// gitQueryFailed: git could not answer a query it normally answers.
+var gitQueryFailed = gitCondition{ //nolint:gochecknoglobals // a fixed condition descriptor; it holds no state
+	code: codeGitFailed, family: errorfamily.Infrastructure,
+}
 
 // newGitClient discovers the work-tree root for dir.
 func newGitClient(ctx context.Context, dir string) (*gitClient, error) {
@@ -80,11 +83,15 @@ func discoverGitRoot(ctx context.Context, dir string) (string, error) {
 
 // tracked returns every stage-0 index entry that carries file content, and
 // how many entries carry none (symlinks and submodules).
-func (g *gitClient) tracked(ctx context.Context) (files []trackedFile, contentLess int, err error) {
+func (g *gitClient) tracked(ctx context.Context) ([]trackedFile, int, error) {
 	output, err := runGit(ctx, g.root, "ls-files", "--stage", "-z")
 	if err != nil {
 		return nil, 0, classifyGit(ctx, err, gitQueryFailed, "list tracked files in %q", g.root)
 	}
+
+	var files []trackedFile
+
+	contentLess := 0
 
 	seen := make(map[string]struct{})
 

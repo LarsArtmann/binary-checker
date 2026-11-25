@@ -66,88 +66,86 @@ type ruleSpec struct {
 	metadataOf func(fileInspection) map[string]string
 }
 
-var ( //nolint:gochecknoglobals // the rule registry is static by definition
-	ruleTrackedBinary = &ruleSpec{
-		id:          RuleTrackedBinary,
-		name:        "tracked binary file",
-		description: "A git-tracked file contains binary data (NUL byte or low printable-text ratio). Build artifacts must not be committed.",
-		category:    linter.CategoryBestPractice,
-		severity:    finding.SeverityError,
-		confidence:  finding.ConfidenceFull,
-		tags:        []finding.Tag{tagGit, tagBinary, tagBuildArtifact, tagBestPractice},
-		confidenceOf: func(inspection fileInspection) finding.Confidence {
-			return verdictConfidence(inspection.verdict)
-		},
-		metadataOf: inspectionMetadata,
-		message: func(inspection fileInspection) string {
-			message := fmt.Sprintf(
-				"tracked binary file %q (%d bytes; detected by %s)",
-				inspection.file.Path,
-				inspection.size,
-				inspection.verdict.Evidence,
-			)
-			if inspection.pattern != "" {
-				message += fmt.Sprintf(" and matching %q", inspection.pattern)
-			}
+var ruleTrackedBinary = &ruleSpec{ //nolint:gochecknoglobals // the rule registry is static by definition; every checker shares it
+	id:          RuleTrackedBinary,
+	name:        "tracked binary file",
+	description: "A git-tracked file contains binary data (NUL byte or low printable-text ratio). Build artifacts must not be committed.",
+	category:    linter.CategoryBestPractice,
+	severity:    finding.SeverityError,
+	confidence:  finding.ConfidenceFull,
+	tags:        []finding.Tag{tagGit, tagBinary, tagBuildArtifact, tagBestPractice},
+	confidenceOf: func(inspection fileInspection) finding.Confidence {
+		return verdictConfidence(inspection.verdict)
+	},
+	metadataOf: inspectionMetadata,
+	message: func(inspection fileInspection) string {
+		message := fmt.Sprintf(
+			"tracked binary file %q (%d bytes; detected by %s)",
+			inspection.file.Path,
+			inspection.size,
+			inspection.verdict.Evidence,
+		)
+		if inspection.pattern != "" {
+			message += fmt.Sprintf(" and matching %q", inspection.pattern)
+		}
 
-			return message
-		},
-		suggestion: func(path string) string {
-			return fmt.Sprintf(
-				"remove %s from git (`git rm --cached %s`) and ignore it, or store it in Git LFS",
-				path,
-				path,
-			)
-		},
-	}
+		return message
+	},
+	suggestion: func(path string) string {
+		return fmt.Sprintf(
+			"remove %s from git (`git rm --cached %s`) and ignore it, or store it in Git LFS",
+			path,
+			path,
+		)
+	},
+}
 
-	ruleTrackedPattern = &ruleSpec{
-		id:          RuleTrackedPattern,
-		name:        "tracked binary artifact with text content",
-		description: "A git-tracked file matches a binary artifact pattern but its content reads as text, which usually means an empty or placeholder artifact was committed.",
-		category:    linter.CategoryBestPractice,
-		severity:    finding.SeverityWarning,
-		confidence:  finding.ConfidenceMedium,
-		tags:        []finding.Tag{tagGit, tagBinary, tagBuildArtifact, tagBestPractice},
-		metadataOf:  inspectionMetadata,
-		message: func(inspection fileInspection) string {
-			return fmt.Sprintf(
-				"tracked file %q matches binary artifact pattern %q but its content reads as text",
-				inspection.file.Path,
-				inspection.pattern,
-			)
-		},
-		suggestion: func(path string) string {
-			return fmt.Sprintf(
-				"verify this is not a build artifact committed by mistake; remove it with `git rm --cached %s` or add a .binary-checker.json ignore entry with a reason",
-				path,
-			)
-		},
-	}
+var ruleTrackedPattern = &ruleSpec{ //nolint:gochecknoglobals // the rule registry is static by definition; every checker shares it
+	id:          RuleTrackedPattern,
+	name:        "tracked binary artifact with text content",
+	description: "A git-tracked file matches a binary artifact pattern but its content reads as text, which usually means an empty or placeholder artifact was committed.",
+	category:    linter.CategoryBestPractice,
+	severity:    finding.SeverityWarning,
+	confidence:  finding.ConfidenceMedium,
+	tags:        []finding.Tag{tagGit, tagBinary, tagBuildArtifact, tagBestPractice},
+	metadataOf:  inspectionMetadata,
+	message: func(inspection fileInspection) string {
+		return fmt.Sprintf(
+			"tracked file %q matches binary artifact pattern %q but its content reads as text",
+			inspection.file.Path,
+			inspection.pattern,
+		)
+	},
+	suggestion: func(path string) string {
+		return fmt.Sprintf(
+			"verify this is not a build artifact committed by mistake; remove it with `git rm --cached %s` or add a .binary-checker.json ignore entry with a reason",
+			path,
+		)
+	},
+}
 
-	ruleTrackedIgnored = &ruleSpec{
-		id:          RuleTrackedIgnored,
-		name:        "tracked file matches .gitignore",
-		description: "A file is tracked even though .gitignore matches it. Git ignores apply only to untracked files, so the ignore rule is silently inert until the file is untracked.",
-		category:    linter.CategoryConfiguration,
-		severity:    finding.SeverityWarning,
-		confidence:  finding.ConfidenceFull,
-		tags:        []finding.Tag{tagGit, tagRepositoryHygiene, tagRuleConfiguration},
-		optIn:       true,
-		message: func(inspection fileInspection) string {
-			return fmt.Sprintf(
-				"tracked file %q matches .gitignore; ignore rules do not apply to tracked files",
-				inspection.file.Path,
-			)
-		},
-		suggestion: func(path string) string {
-			return fmt.Sprintf("untrack it with `git rm --cached %s`", path)
-		},
-	}
+var ruleTrackedIgnored = &ruleSpec{ //nolint:gochecknoglobals // the rule registry is static by definition; every checker shares it
+	id:          RuleTrackedIgnored,
+	name:        "tracked file matches .gitignore",
+	description: "A file is tracked even though .gitignore matches it. Git ignores apply only to untracked files, so the ignore rule is silently inert until the file is untracked.",
+	category:    linter.CategoryConfiguration,
+	severity:    finding.SeverityWarning,
+	confidence:  finding.ConfidenceFull,
+	tags:        []finding.Tag{tagGit, tagRepositoryHygiene, tagRuleConfiguration},
+	optIn:       true,
+	message: func(inspection fileInspection) string {
+		return fmt.Sprintf(
+			"tracked file %q matches .gitignore; ignore rules do not apply to tracked files",
+			inspection.file.Path,
+		)
+	},
+	suggestion: func(path string) string {
+		return fmt.Sprintf("untrack it with `git rm --cached %s`", path)
+	},
+}
 
-	// ruleTable lists every rule in registry order.
-	ruleTable = []*ruleSpec{ruleTrackedBinary, ruleTrackedPattern, ruleTrackedIgnored}
-)
+// ruleTable lists every rule in registry order.
+var ruleTable = []*ruleSpec{ruleTrackedBinary, ruleTrackedPattern, ruleTrackedIgnored} //nolint:gochecknoglobals // the rule registry is static by definition; every checker shares it
 
 // inspectionMetadata records what the content inspection measured.
 func inspectionMetadata(inspection fileInspection) map[string]string {

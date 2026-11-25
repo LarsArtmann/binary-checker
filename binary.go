@@ -25,9 +25,9 @@ const (
 type Evidence string
 
 const (
-	// EvidenceNulByte: the sample contains a NUL byte. Deterministic.
+	// EvidenceNulByte reports a NUL byte in the sample. Deterministic.
 	EvidenceNulByte Evidence = "nul-byte"
-	// EvidenceTextRatio: too few printable bytes. A heuristic.
+	// EvidenceTextRatio reports too few printable bytes. A heuristic.
 	EvidenceTextRatio Evidence = "text-ratio"
 )
 
@@ -46,7 +46,7 @@ type ContentVerdict struct {
 // The size is taken from the descriptor that is read, not from a separate
 // stat of the path, so nothing can be swapped in between. A path that is not
 // a regular file fails with an error matching ErrNotRegularFile.
-func ReadSample(path string) (sample []byte, size int64, err error) {
+func ReadSample(path string) ([]byte, int64, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
 		return nil, 0, err

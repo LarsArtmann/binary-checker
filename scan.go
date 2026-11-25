@@ -178,15 +178,15 @@ func (r *ScanResult) collect(config Config, inspection fileInspection) error {
 // accountUnflagged records why an inspection produced no finding.
 func (r *ScanResult) accountUnflagged(inspection fileInspection) {
 	switch inspection.disposition {
-	case dispositionSkipped:
-		r.FilesSkipped++
-	case dispositionLFS:
-		r.LFSFiles++
+	case dispositionInspected:
+		r.FilesScanned++
 	case dispositionExempt:
 		r.FilesScanned++
 		r.ExemptFiles++
-	default:
-		r.FilesScanned++
+	case dispositionLFS:
+		r.LFSFiles++
+	case dispositionSkipped:
+		r.FilesSkipped++
 	}
 }
 
