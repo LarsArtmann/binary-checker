@@ -18,6 +18,9 @@ const (
 	maxScanWorkers = 8
 	codeScan       = "binary_checker.scan"
 	codeRule       = "binary_checker.rule"
+
+	// codeScanInterrupted names a scan the caller ended before it finished.
+	codeScanInterrupted = "scan.interrupted"
 )
 
 // ScanResult is one repository scan. Findings are sorted by path, line, then
@@ -127,30 +130,30 @@ func (c *Checker) scan(ctx context.Context, dir string) (*ScanResult, error) {
 		paths[i] = file.Path
 	}
 
-	lfs := git.lfsPaths(ctx, paths)
+	lfs, err := git.lfsPaths(ctx, paths)
+	if err != nil {
+		return nil, err
+	}
 
-	inspections := inspectAll(ctx, git.root, tracked, config, lfs)
+	inspections, err := inspectAll(ctx, git.root, tracked, config, lfs)
+	if err != nil {
+		return nil, err
+	}
 
 	result := &ScanResult{Root: git.root, FilesSkipped: indexSkipped}
 
-	flagged := make(map[string]bool)
-
 	for _, inspection := range inspections {
-		didFlag, inspectErr := c.collectInspection(config, result, inspection)
-		if inspectErr != nil {
-			return nil, inspectErr
-		}
-
-		if didFlag {
-			flagged[inspection.file.Path] = true
+		if collectErr := c.collectInspection(config, result, inspection); collectErr != nil {
+			return nil, collectErr
 		}
 	}
 
+	// BC003 answers a different question than BC001 and BC002 ("is this file
+	// supposed to be ignored?" rather than "is it binary?"), so every
+	// tracked-but-ignored path is reported, whether or not another rule already
+	// flagged the file. Skipping flagged files would let --disable BC002 hide a
+	// BC003 finding the user explicitly asked for.
 	for _, path := range trackedIgnored {
-		if flagged[path] {
-			continue
-		}
-
 		reason, suppressed := config.SuppressionReason(path, RuleTrackedIgnored)
 		if suppressed {
 			result.Suppressed++
@@ -162,7 +165,6 @@ func (c *Checker) scan(ctx context.Context, dir string) (*ScanResult, error) {
 		}
 
 		result.Findings = append(result.Findings, item)
-		flagged[path] = true
 	}
 
 	SortFindings(result.Findings)
@@ -170,18 +172,14 @@ func (c *Checker) scan(ctx context.Context, dir string) (*ScanResult, error) {
 	return result, nil
 }
 
-// collectInspection records one inspection in result and reports whether the
-// file produced a finding, so the tracked-ignored pass does not double count it.
-func (c *Checker) collectInspection(
-	config Config,
-	result *ScanResult,
-	inspection fileInspection,
-) (bool, error) {
+// collectInspection records one inspection in result: the reason a clean file
+// was not flagged, or the finding an offending file produced.
+func (c *Checker) collectInspection(config Config, result *ScanResult, inspection fileInspection) error {
 	ruleID, matched := c.ruleForInspection(inspection)
 	if !matched {
 		result.accountUnflagged(inspection)
 
-		return false, nil
+		return nil
 	}
 
 	result.FilesScanned++
@@ -193,14 +191,14 @@ func (c *Checker) collectInspection(
 
 	item, buildErr := buildFinding(ruleID, inspection, reason)
 	if buildErr != nil {
-		return false, errorfamily.WrapCorruptionf(
+		return errorfamily.WrapCorruptionf(
 			buildErr, codeRule, "collect %s finding for %q", ruleID, inspection.file.Path,
 		)
 	}
 
 	result.Findings = append(result.Findings, item)
 
-	return true, nil
+	return nil
 }
 
 // accountUnflagged records why an inspection produced no finding.
@@ -243,13 +241,16 @@ type fileInspection struct {
 	skip    bool
 }
 
+// inspectAll inspects every tracked file with a bounded worker pool. It fails
+// when the context ends first: the files it never looked at must not come
+// back as "skipped" inside an otherwise successful result.
 func inspectAll(
 	ctx context.Context,
 	root string,
 	files []trackedFile,
 	config Config,
 	lfs map[string]bool,
-) []fileInspection {
+) ([]fileInspection, error) {
 	workers := max(min(runtime.NumCPU(), maxScanWorkers), 1)
 
 	inspections := make([]fileInspection, len(files))
@@ -265,13 +266,22 @@ func inspectAll(
 	}
 
 	for index := range files {
+		if ctx.Err() != nil {
+			break
+		}
+
 		jobs <- index
 	}
 
 	close(jobs)
 	waitGroup.Wait()
 
-	return inspections
+	if err := ctx.Err(); err != nil {
+		return nil, errorfamily.Wrapf(err, errorfamily.Classify(err), codeScanInterrupted,
+			"inspect tracked files under %q", root)
+	}
+
+	return inspections, nil
 }
 
 func inspectFile(
