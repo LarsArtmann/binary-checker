@@ -145,7 +145,11 @@ var ruleTrackedIgnored = &ruleSpec{ //nolint:gochecknoglobals // the rule regist
 }
 
 // ruleTable lists every rule in registry order.
-var ruleTable = []*ruleSpec{ruleTrackedBinary, ruleTrackedPattern, ruleTrackedIgnored} //nolint:gochecknoglobals // the rule registry is static by definition; every checker shares it
+var ruleTable = []*ruleSpec{ //nolint:gochecknoglobals // static registry
+	ruleTrackedBinary,
+	ruleTrackedPattern,
+	ruleTrackedIgnored,
+}
 
 // inspectionMetadata records what the content inspection measured.
 func inspectionMetadata(inspection fileInspection) map[string]string {

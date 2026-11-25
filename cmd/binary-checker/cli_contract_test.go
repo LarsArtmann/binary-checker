@@ -96,6 +96,7 @@ func TestRunRejectsBaselineWithUnknownMember(t *testing.T) {
 
 	dir := gittest.NewRepo(t)
 	baseline := filepath.Join(t.TempDir(), "baseline.json")
+
 	if err := os.WriteFile(baseline, []byte(`{"version":1,"tool":"binary-check","findngs":[]}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
