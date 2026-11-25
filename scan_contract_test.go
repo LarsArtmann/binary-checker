@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	errorfamily "github.com/larsartmann/go-error-family"
@@ -98,6 +99,23 @@ func TestInspectAllFailsOnCancelledContext(t *testing.T) {
 
 	if inspections != nil {
 		t.Fatalf("a cancelled inspection pass must not return inspections, got %+v", inspections)
+	}
+}
+
+// "exit status 128" alone does not tell a user what to fix. git's own stderr
+// does, so it travels with the error, together with the query that failed.
+func TestGitFailureExplainsItselfWithStderr(t *testing.T) {
+	t.Parallel()
+
+	_, err := discoverGitRoot(context.Background(), t.TempDir())
+	if !errors.Is(err, ErrNotGitRepository) {
+		t.Fatalf("error = %v, want one matching ErrNotGitRepository", err)
+	}
+
+	for _, want := range []string{"git rev-parse --show-toplevel", "fatal:", "not a git repository"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q does not explain itself: missing %q", err, want)
+		}
 	}
 }
 
