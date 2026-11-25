@@ -25,8 +25,10 @@ const isolatedConfigName = "test-global-config"
 // NewRepo creates an empty git repository in a temporary directory and returns
 // its path.
 //
-// The repository never reads the developer's global or system git config, so a
-// local alias, hook, or signing requirement cannot change test outcomes.
+// The repository never reads the developer's global or system git config, nor
+// the global ignore and attributes files git keeps under $XDG_CONFIG_HOME, so
+// a local alias, hook, signing requirement, or "*.zip" ignore rule cannot
+// change test outcomes.
 func NewRepo(t *testing.T) string {
 	t.Helper()
 
@@ -56,6 +58,12 @@ func Run(t *testing.T, dir string, args ...string) {
 }
 
 // isolatedEnv is this process's environment plus git config isolation for dir.
+//
+// Silencing the config files is not enough: git also reads the ignore file at
+// $XDG_CONFIG_HOME/git/ignore (and the global attributes file next to it)
+// regardless of GIT_CONFIG_GLOBAL. Pointing XDG_CONFIG_HOME at a directory
+// inside the fixture closes that leak, so a developer's "*.zip" ignore rule
+// cannot turn a fixture into a tracked-but-ignored case.
 func isolatedEnv(dir string) []string {
 	configPath := filepath.Join(dir, ".git", isolatedConfigName)
 	if _, err := os.Stat(configPath); err != nil {
@@ -68,6 +76,7 @@ func isolatedEnv(dir string) []string {
 		os.Environ(),
 		"GIT_CONFIG_GLOBAL="+configPath,
 		"GIT_CONFIG_NOSYSTEM=1",
+		"XDG_CONFIG_HOME="+filepath.Join(dir, ".git"),
 	)
 }
 
