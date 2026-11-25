@@ -23,16 +23,18 @@ import (
 
 // Provider is the BuildFlow registration. A package-level var so the
 // registration runs at init time.
-var Provider = toolsdk.Register(toolsdk.Spec{
-	Name:    binarycheck.ToolName,
-	Trigger: toolsdk.AnyLanguage(),
-	Description: "Detects git-tracked binary files that should not be committed " +
-		"(NUL-byte/text-ratio content analysis plus binary artifact patterns; " +
-		"Git LFS pointers, symlinks, submodules, and size-bounded font/image assets are exempt). " +
-		"Detector-only: it reports and suggests index cleanup, never rewrites git.",
-	Detect:      newDetector(),
-	HealthCheck: gitHealthCheck,
-})
+var Provider = toolsdk.Register( //nolint:gochecknoglobals // registration runs at package init; toolsdk.Register returns the spec handle
+	toolsdk.Spec{
+		Name:    binarycheck.ToolName,
+		Trigger: toolsdk.AnyLanguage(),
+		Description: "Detects git-tracked binary files that should not be committed " +
+			"(NUL-byte/text-ratio content analysis plus binary artifact patterns; " +
+			"Git LFS pointers, symlinks, submodules, and size-bounded font/image assets are exempt). " +
+			"Detector-only: it reports and suggests index cleanup, never rewrites git.",
+		Detect:      newDetector(),
+		HealthCheck: gitHealthCheck,
+	},
+)
 
 func gitHealthCheck(_ context.Context) error {
 	if _, err := exec.LookPath("git"); err != nil {

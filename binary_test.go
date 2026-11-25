@@ -13,7 +13,12 @@ func TestClassifyContent(t *testing.T) {
 	}{
 		{name: "empty", sample: nil, binary: false},
 		{name: "ascii text", sample: []byte("hello, world\n"), binary: false},
-		{name: "utf8 text", sample: []byte("héllo wörld — 日本語\n"), binary: false},
+		// Non-ASCII text is the point of this case, not an accidental i18n bug.
+		{
+			name:   "utf8 text",
+			sample: []byte("héllo wörld — 日本語\n"), //nolint:gosmopolitan // non-ASCII is the case
+			binary: false,
+		},
 		{name: "nul byte", sample: []byte{'a', 0, 'b'}, binary: true, evidence: "nul-byte"},
 		{
 			name:     "png header",

@@ -8,43 +8,106 @@ import (
 // binaryArtifactPatterns lists path shapes that denote build artifacts,
 // executables, archives, or media. Patterns are lowercase and matched against
 // the lowercased repository-relative path (see MatchPath).
-var binaryArtifactPatterns = []string{
+var binaryArtifactPatterns = []string{ //nolint:gochecknoglobals // immutable pattern table; a per-call allocation would run once per scanned file
 	// Executables and shared objects.
-	"*.exe", "*.dll", "*.dylib", "*.so", "*.so.*", "*.kexe", "*.out",
-	"*.app/", "__pycache__/", "node_modules/", ".gradle/",
+	"*.exe",
+	"*.dll",
+	"*.dylib",
+	"*.so",
+	"*.so.*",
+	"*.kexe",
+	"*.out",
+	"*.app/",
+	"__pycache__/",
+	"node_modules/",
+	".gradle/",
 
 	// JVM artifacts.
-	"*.class", "*.jar", "*.war", "*.ear", "*.nar",
+	"*.class",
+	"*.jar",
+	"*.war",
+	"*.ear",
+	"*.nar",
 
 	// Compiled objects and static libraries.
-	"*.o", "*.a", "*.lib", "*.obj", "*.pyc", "*.pyo",
+	"*.o",
+	"*.a",
+	"*.lib",
+	"*.obj",
+	"*.pyc",
+	"*.pyo",
 
 	// Archives and disk images.
-	"*.zip", "*.tar", "*.tar.gz", "*.tgz", "*.tar.xz", "*.txz",
-	"*.tar.bz2", "*.tbz2", "*.gz", "*.bz2", "*.xz", "*.zst",
-	"*.7z", "*.rar", "*.iso", "*.img",
+	"*.zip",
+	"*.tar",
+	"*.tar.gz",
+	"*.tgz",
+	"*.tar.xz",
+	"*.txz",
+	"*.tar.bz2",
+	"*.tbz2",
+	"*.gz",
+	"*.bz2",
+	"*.xz",
+	"*.zst",
+	"*.7z",
+	"*.rar",
+	"*.iso",
+	"*.img",
 
 	// Other opaque build outputs.
 	"*.bin",
 
 	// Images that are commonly committed assets (exempt under a size limit
 	// unless the user disables the exemption).
-	"*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.ico", "*.webp",
-	"*.tif", "*.tiff", "*.psd", "*.ai",
+	"*.png",
+	"*.jpg",
+	"*.jpeg",
+	"*.gif",
+	"*.bmp",
+	"*.ico",
+	"*.webp",
+	"*.tif",
+	"*.tiff",
+	"*.psd",
+	"*.ai",
 
 	// Web fonts (exempt under a size limit unless the user disables it).
-	"*.ttf", "*.otf", "*.woff", "*.woff2", "*.eot",
+	"*.ttf",
+	"*.otf",
+	"*.woff",
+	"*.woff2",
+	"*.eot",
 
 	// Audio and video.
-	"*.mp3", "*.wav", "*.flac", "*.ogg", "*.m4a", "*.aac",
-	"*.mp4", "*.avi", "*.mkv", "*.wmv", "*.flv", "*.mov", "*.webm",
+	"*.mp3",
+	"*.wav",
+	"*.flac",
+	"*.ogg",
+	"*.m4a",
+	"*.aac",
+	"*.mp4",
+	"*.avi",
+	"*.mkv",
+	"*.wmv",
+	"*.flv",
+	"*.mov",
+	"*.webm",
 
 	// Binary documents.
-	"*.pdf", "*.doc", "*.docx", "*.xls", "*.xlsx", "*.ppt", "*.pptx",
+	"*.pdf",
+	"*.doc",
+	"*.docx",
+	"*.xls",
+	"*.xlsx",
+	"*.ppt",
+	"*.pptx",
 	"*.odt",
 
 	// Databases.
-	"*.db", "*.sqlite", "*.sqlite3",
+	"*.db",
+	"*.sqlite",
+	"*.sqlite3",
 
 	// Operating-system noise.
 	".ds_store",
@@ -52,12 +115,25 @@ var binaryArtifactPatterns = []string{
 
 // FontPatterns are web-font extensions. They are legitimate repository assets
 // under the configured size limit.
-var FontPatterns = []string{"*.ttf", "*.otf", "*.woff", "*.woff2", "*.eot"}
+var FontPatterns = []string{ //nolint:gochecknoglobals // immutable pattern table; allocating it per call would run once per scanned file
+	"*.ttf",
+	"*.otf",
+	"*.woff",
+	"*.woff2",
+	"*.eot",
+}
 
 // SmallImagePatterns are image extensions that are legitimate repository
 // assets under the configured size limit. SVG is deliberately absent: it is
 // text, not binary.
-var SmallImagePatterns = []string{"*.ico", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp"}
+var SmallImagePatterns = []string{ //nolint:gochecknoglobals // immutable pattern table; allocating it per call would run once per scanned file
+	"*.ico",
+	"*.png",
+	"*.jpg",
+	"*.jpeg",
+	"*.gif",
+	"*.webp",
+}
 
 // MatchBinaryArtifact returns the first binary-artifact pattern matching
 // relPath, or "" when no pattern matches.

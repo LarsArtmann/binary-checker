@@ -187,7 +187,9 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	}
 
 	if err := flags.Parse(args); err != nil {
-		return opts, err
+		// flag.ErrHelp must stay reachable through errors.Is: `run` treats it as
+		// a clean exit, not a failure.
+		return opts, errorfamily.WrapRejectionf(err, codeCLI, "parse flags")
 	}
 
 	switch flags.NArg() {

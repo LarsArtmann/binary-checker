@@ -193,7 +193,9 @@ func (c *Checker) collectInspection(
 
 	item, buildErr := buildFinding(ruleID, inspection, reason)
 	if buildErr != nil {
-		return false, errorfamily.WrapCorruptionf(buildErr, codeRule, "build finding for %q", ruleID)
+		return false, errorfamily.WrapCorruptionf(
+			buildErr, codeRule, "collect %s finding for %q", ruleID, inspection.file.Path,
+		)
 	}
 
 	result.Findings = append(result.Findings, item)
@@ -388,7 +390,12 @@ func buildFinding(ruleID string, inspection fileInspection, suppressionReason st
 		})
 	}
 
-	return builder.Build()
+	item, err := builder.Build()
+	if err != nil {
+		return finding.Finding{}, errorfamily.WrapCorruptionf(err, codeRule, "build finding")
+	}
+
+	return item, nil
 }
 
 func buildIgnoredFinding(path, suppressionReason string) (finding.Finding, error) {
@@ -421,5 +428,12 @@ func buildIgnoredFinding(path, suppressionReason string) (finding.Finding, error
 		})
 	}
 
-	return builder.Build()
+	item, err := builder.Build()
+	if err != nil {
+		return finding.Finding{}, errorfamily.WrapCorruptionf(
+			err, codeRule, "build %s finding for %q", RuleTrackedIgnored, path,
+		)
+	}
+
+	return item, nil
 }
