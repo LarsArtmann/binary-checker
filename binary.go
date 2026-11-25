@@ -20,48 +20,82 @@ const (
 	TextRatioThreshold = 0.7
 )
 
+// Evidence names the signal that decided a content verdict. The zero value
+// means text: no signal fired.
+type Evidence string
+
+const (
+	// EvidenceNulByte: the sample contains a NUL byte. Deterministic.
+	EvidenceNulByte Evidence = "nul-byte"
+	// EvidenceTextRatio: too few printable bytes. A heuristic.
+	EvidenceTextRatio Evidence = "text-ratio"
+)
+
 // ContentVerdict is the result of inspecting a file's leading bytes.
 type ContentVerdict struct {
 	// Binary reports whether the sample looks like binary data.
 	Binary bool
-	// Evidence names the signal that decided the verdict: "nul-byte",
-	// "text-ratio", or "" for text files.
-	Evidence string
+	// Evidence names the signal that decided a binary verdict.
+	Evidence Evidence
 }
 
-// ReadSample reads up to SampleSize bytes from path. A file smaller than the
-// sample size yields its whole content.
-func ReadSample(path string) ([]byte, error) {
+// ReadSample opens path, confirms it is a regular file, and reads up to
+// SampleSize leading bytes. It returns the sample and the file's size; a file
+// smaller than the sample size yields its whole content.
+//
+// The size is taken from the descriptor that is read, not from a separate
+// stat of the path, so nothing can be swapped in between. A path that is not
+// a regular file fails with an error matching ErrNotRegularFile.
+func ReadSample(path string) (sample []byte, size int64, err error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if !info.Mode().IsRegular() {
+		return nil, 0, ErrNotRegularFile
+	}
+
+	// #nosec G304 -- the path comes from the git index of the scanned
+	// repository; reading its leading bytes is this tool's whole purpose.
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	defer func() { _ = file.Close() }()
+
+	opened, err := file.Stat()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if !opened.Mode().IsRegular() {
+		return nil, 0, ErrNotRegularFile
+	}
 
 	buffer := make([]byte, SampleSize)
 
 	read, err := io.ReadFull(file, buffer)
 	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return buffer[:read], nil
+	return buffer[:read], opened.Size(), nil
 }
 
 // ClassifyContent decides whether a byte sample is binary.
 //
-// A NUL byte is a deterministic binary signal (full confidence). Otherwise the
-// printable-text ratio decides: fewer than TextRatioThreshold printable bytes
-// means binary. The ratio path is a heuristic, so callers should report lower
-// confidence for it.
+// A NUL byte is a deterministic binary signal. Otherwise the printable-text
+// ratio decides: fewer than TextRatioThreshold printable bytes means binary.
+// The ratio path is a heuristic, so callers report lower confidence for it.
 func ClassifyContent(sample []byte) ContentVerdict {
 	if len(sample) == 0 {
 		return ContentVerdict{}
 	}
 
 	if bytes.IndexByte(sample, 0) >= 0 {
-		return ContentVerdict{Binary: true, Evidence: "nul-byte"}
+		return ContentVerdict{Binary: true, Evidence: EvidenceNulByte}
 	}
 
 	printable := 0
@@ -69,12 +103,7 @@ func ClassifyContent(sample []byte) ContentVerdict {
 	for offset := 0; offset < len(sample); {
 		runeValue, runeSize := utf8.DecodeRune(sample[offset:])
 		if runeValue == utf8.RuneError && runeSize == 1 {
-			// Invalid UTF-8 byte: count only printable ASCII, matching the
-			// way a text file with stray bytes still reads as text.
-			if sample[offset] >= 0x20 && sample[offset] <= 0x7e {
-				printable++
-			}
-
+			// An invalid UTF-8 byte is never printable; skip it.
 			offset++
 
 			continue
@@ -88,7 +117,7 @@ func ClassifyContent(sample []byte) ContentVerdict {
 	}
 
 	if float64(printable)/float64(len(sample)) < TextRatioThreshold {
-		return ContentVerdict{Binary: true, Evidence: "text-ratio"}
+		return ContentVerdict{Binary: true, Evidence: EvidenceTextRatio}
 	}
 
 	return ContentVerdict{}

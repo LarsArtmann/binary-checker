@@ -25,11 +25,11 @@ func scanRepo(t *testing.T, dir string) *ScanResult {
 	return result
 }
 
-func findingsByRule(result *ScanResult, ruleID string) []finding.Finding {
+func findingsByRule(result *ScanResult, ruleID RuleID) []finding.Finding {
 	var matched []finding.Finding
 
 	for _, item := range result.Findings {
-		if string(item.Rule) == ruleID {
+		if RuleID(item.Rule) == ruleID {
 			matched = append(matched, item)
 		}
 	}

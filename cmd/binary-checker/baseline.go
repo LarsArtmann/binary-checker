@@ -14,13 +14,7 @@ import (
 	binarycheck "github.com/larsartmann/binary-checker"
 )
 
-const (
-	baselineVersion = 1
-	codeBaseline    = "binary_checker.baseline"
-)
-
-// errBaseline marks baseline problems: the file itself is the defect.
-var errBaseline error = errorfamily.NewRejection(codeBaseline, "binary-checker baseline")
+const baselineVersion = 1
 
 type baselineFile struct {
 	Version  int      `json:"version"`
@@ -28,52 +22,58 @@ type baselineFile struct {
 	Findings []string `json:"findings"`
 }
 
+// baseline is the set of finding IDs a repository has already accepted.
 type baseline struct {
-	ids map[string]bool
+	ids map[string]struct{}
 }
 
 // loadBaseline reads a baseline file. An empty path means "no baseline was
 // configured", which is an empty accepted set, never a nil pointer: callers can
 // always ask whether a finding is accepted.
+//
+// The file is the user's input, so a missing, unreadable, or malformed
+// baseline is a Rejection, never silently treated as "accepts nothing".
 func loadBaseline(path string) (*baseline, error) {
 	if path == "" {
-		return &baseline{ids: make(map[string]bool)}, nil
+		return &baseline{ids: make(map[string]struct{})}, nil
 	}
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- the path is the user's own --baseline argument.
 	if err != nil {
-		return nil, errorfamily.WrapInfrastructuref(err, codeBaseline, "read %q", path)
+		if errors.Is(err, os.ErrNotExist) || errors.Is(err, os.ErrPermission) {
+			return nil, errorfamily.WrapRejectionf(err, codeBaselineRead, "read baseline %q", path)
+		}
+
+		return nil, errorfamily.WrapInfrastructuref(err, codeBaselineReadFailed, "read baseline %q", path)
 	}
 
 	var file baselineFile
-	if err := json.Unmarshal(data, &file); err != nil {
-		return nil, errorfamily.WrapRejectionf(err, codeBaseline, "parse %q", path)
+	if err := json.Unmarshal(data, &file, json.RejectUnknownMembers(true)); err != nil {
+		return nil, errorfamily.WrapRejectionf(err, codeBaselineParse, "parse baseline %q", path)
 	}
 
 	if file.Version != baselineVersion {
-		return nil, errorfamily.WrapRejectionf(
-			errBaseline, codeBaseline,
-			"%q has unsupported version %d (want %d)", path, file.Version, baselineVersion,
-		)
+		return nil, errorfamily.Newf(errorfamily.Rejection, codeBaselineVersion,
+			"%q has unsupported version %d (want %d)", path, file.Version, baselineVersion)
 	}
 
 	if file.Tool != "" && file.Tool != binarycheck.ToolName {
-		return nil, errorfamily.WrapRejectionf(
-			errBaseline, codeBaseline,
-			"%q belongs to tool %q, not %q", path, file.Tool, binarycheck.ToolName,
-		)
+		return nil, errorfamily.Newf(errorfamily.Rejection, codeBaselineTool,
+			"%q belongs to tool %q, not %q", path, file.Tool, binarycheck.ToolName)
 	}
 
-	ids := make(map[string]bool, len(file.Findings))
+	ids := make(map[string]struct{}, len(file.Findings))
 	for _, id := range file.Findings {
-		ids[id] = true
+		ids[id] = struct{}{}
 	}
 
 	return &baseline{ids: ids}, nil
 }
 
 func (b *baseline) contains(item finding.Finding) bool {
-	return b.ids[string(item.ID)]
+	_, accepted := b.ids[string(item.ID)]
+
+	return accepted
 }
 
 func saveBaseline(path string, findings []finding.Finding) error {
@@ -89,7 +89,7 @@ func saveBaseline(path string, findings []finding.Finding) error {
 
 	data, err := json.Marshal(file, jsontext.WithIndentPrefix(""), jsontext.WithIndent("  "))
 	if err != nil {
-		return errorfamily.WrapInfrastructuref(err, codeBaseline, "encode %q", path)
+		return errorfamily.WrapOrchestrationf(err, codeBaselineEncode, "encode baseline %q", path)
 	}
 
 	return writeAtomic(path, append(data, '\n'))
@@ -108,7 +108,7 @@ func writeAtomic(path string, data []byte) (err error) {
 
 	temp, err := os.CreateTemp(dir, ".binary-checker-baseline-*")
 	if err != nil {
-		return errorfamily.WrapInfrastructuref(err, codeBaseline, "create baseline in %q", dir)
+		return errorfamily.WrapInfrastructuref(err, codeBaselineWrite, "create baseline in %q", dir)
 	}
 
 	tempName := temp.Name()
@@ -116,26 +116,24 @@ func writeAtomic(path string, data []byte) (err error) {
 	defer func() {
 		removeErr := os.Remove(tempName)
 		if removeErr != nil && !errors.Is(removeErr, fs.ErrNotExist) {
-			err = errorfamily.Compose(
-				err,
-				errorfamily.WrapInfrastructuref(removeErr, codeBaseline, "remove temp file %q", tempName),
-			)
+			err = errors.Join(err,
+				errorfamily.WrapInfrastructuref(removeErr, codeBaselineWrite, "remove temp file %q", tempName))
 		}
 	}()
 
 	if _, writeErr := temp.Write(data); writeErr != nil {
-		return errorfamily.Compose(
-			errorfamily.WrapInfrastructuref(writeErr, codeBaseline, "write %q", tempName),
+		return errors.Join(
+			errorfamily.WrapInfrastructuref(writeErr, codeBaselineWrite, "write %q", tempName),
 			closeTemp(temp, tempName),
 		)
 	}
 
 	if closeErr := temp.Close(); closeErr != nil {
-		return errorfamily.WrapInfrastructuref(closeErr, codeBaseline, "close %q", tempName)
+		return errorfamily.WrapInfrastructuref(closeErr, codeBaselineWrite, "close %q", tempName)
 	}
 
 	if renameErr := os.Rename(tempName, path); renameErr != nil {
-		return errorfamily.WrapInfrastructuref(renameErr, codeBaseline, "replace %q", path)
+		return errorfamily.WrapInfrastructuref(renameErr, codeBaselineWrite, "replace %q", path)
 	}
 
 	return nil
@@ -143,7 +141,7 @@ func writeAtomic(path string, data []byte) (err error) {
 
 func closeTemp(file *os.File, name string) error {
 	if err := file.Close(); err != nil {
-		return errorfamily.WrapInfrastructuref(err, codeBaseline, "close %q", name)
+		return errorfamily.WrapInfrastructuref(err, codeBaselineWrite, "close %q", name)
 	}
 
 	return nil

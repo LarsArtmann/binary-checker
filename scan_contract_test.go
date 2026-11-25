@@ -30,7 +30,7 @@ func TestScanReportsTrackedIgnoredNextToOtherRules(t *testing.T) {
 	result := scanRepo(t, dir)
 
 	for _, test := range []struct {
-		rule  string
+		rule  RuleID
 		files []string
 	}{
 		{rule: RuleTrackedBinary, files: []string{"debug.log"}},
@@ -119,37 +119,35 @@ func TestGitFailureExplainsItselfWithStderr(t *testing.T) {
 	}
 }
 
-// The LFS attribute lookup degrades silently when git cannot answer, but a
-// cancelled context is the caller ending the scan and must still surface.
-func TestLFSPathsDistinguishesCancellationFromGitFailure(t *testing.T) {
+// A failed LFS attribute lookup must not pass for "no LFS files here": the
+// scan would report LFS pointers as binary and nobody would learn why.
+func TestLFSPathsReportsFailures(t *testing.T) {
 	t.Parallel()
-
-	dir := gittest.NewRepo(t)
-	gittest.WriteFile(t, dir, ".gitattributes", []byte("*.psd filter=lfs\n"))
-	gittest.WriteFile(t, dir, "source.psd", []byte{0x38, 0x42, 0x50, 0x53, 0x00})
-	gittest.AddFiles(t, dir, ".gitattributes", "source.psd")
 
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	lfs, err := (&gitClient{root: dir}).lfsPaths(cancelled, []string{"source.psd"})
+	lfs, err := (&gitClient{root: gittest.NewRepo(t)}).lfsPaths(cancelled, []string{"source.psd"})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %v, want one wrapping context.Canceled", err)
+	}
+
+	if errorfamily.Code(err) != codeGitCancelled {
+		t.Fatalf("code = %q, want %q (error: %v)", errorfamily.Code(err), codeGitCancelled, err)
 	}
 
 	if lfs != nil {
 		t.Fatalf("a cancelled lookup must not return a partial map, got %v", lfs)
 	}
 
-	// A root that is not a repository makes git fail outright: that is the
-	// documented degradation, reported as "no LFS knowledge", not as an error.
-	lfs, err = (&gitClient{root: t.TempDir()}).lfsPaths(context.Background(), []string{"source.psd"})
-	if err != nil {
-		t.Fatalf("a failing attribute lookup must degrade, got %v", err)
+	// A root that is not a repository makes git fail outright.
+	_, err = (&gitClient{root: t.TempDir()}).lfsPaths(context.Background(), []string{"source.psd"})
+	if errorfamily.Code(err) != codeGitFailed {
+		t.Fatalf("code = %q, want %q (error: %v)", errorfamily.Code(err), codeGitFailed, err)
 	}
 
-	if lfs != nil {
-		t.Fatalf("a failed lookup must yield no LFS knowledge, got %v", lfs)
+	if errorfamily.Classify(err) != errorfamily.Infrastructure {
+		t.Fatalf("a git that cannot answer is an infrastructure problem, got %v", errorfamily.Classify(err))
 	}
 }
 

@@ -13,7 +13,7 @@ import (
 func TestRuleIDsAreStable(t *testing.T) {
 	t.Parallel()
 
-	want := []string{"BC001", "BC002", "BC003"}
+	want := []RuleID{RuleTrackedBinary, RuleTrackedPattern, RuleTrackedIgnored}
 	got := AllRuleIDs()
 
 	if len(got) != len(want) {
@@ -37,7 +37,7 @@ func TestDefaultRegistryExcludesOptInRule(t *testing.T) {
 
 	registry := NewRegistry(NewChecker())
 
-	if registry.Has(RuleTrackedIgnored) {
+	if registry.Has(string(RuleTrackedIgnored)) {
 		t.Fatal("BC003 is opt-in and must not be registered by default")
 	}
 
@@ -78,9 +78,9 @@ func TestOptInRuleRunsWhenSelected(t *testing.T) {
 	}
 }
 
-func hasRule(rules []linter.Rule, id string) bool {
+func hasRule(rules []linter.Rule, id RuleID) bool {
 	for _, rule := range rules {
-		if rule.ID() == id {
+		if rule.ID() == string(id) {
 			return true
 		}
 	}

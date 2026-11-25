@@ -9,7 +9,7 @@ func TestClassifyContent(t *testing.T) {
 		name     string
 		sample   []byte
 		binary   bool
-		evidence string
+		evidence Evidence
 	}{
 		{name: "empty", sample: nil, binary: false},
 		{name: "ascii text", sample: []byte("hello, world\n"), binary: false},
@@ -19,18 +19,18 @@ func TestClassifyContent(t *testing.T) {
 			sample: []byte("héllo wörld — 日本語\n"), //nolint:gosmopolitan // non-ASCII is the case
 			binary: false,
 		},
-		{name: "nul byte", sample: []byte{'a', 0, 'b'}, binary: true, evidence: "nul-byte"},
+		{name: "nul byte", sample: []byte{'a', 0, 'b'}, binary: true, evidence: EvidenceNulByte},
 		{
 			name:     "png header",
 			sample:   []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0},
 			binary:   true,
-			evidence: "nul-byte",
+			evidence: EvidenceNulByte,
 		},
 		{
 			name:     "control heavy",
 			sample:   []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 'a', 'b'},
 			binary:   true,
-			evidence: "text-ratio",
+			evidence: EvidenceTextRatio,
 		},
 		{
 			name:   "mostly text with stray control bytes",

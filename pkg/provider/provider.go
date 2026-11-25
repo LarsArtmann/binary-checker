@@ -11,7 +11,6 @@ package provider
 import (
 	"context"
 	"os/exec"
-	"sort"
 
 	errorfamily "github.com/larsartmann/go-error-family"
 	"github.com/larsartmann/go-finding"
@@ -20,6 +19,10 @@ import (
 
 	binarycheck "github.com/larsartmann/binary-checker"
 )
+
+// codeDetect classifies an error that reaches the detector unclassified. The
+// checker classifies everything it returns, so this is a safety net.
+const codeDetect = "binary_checker.provider.detect"
 
 // Provider is the BuildFlow registration. A package-level var so the
 // registration runs at init time.
@@ -40,11 +43,12 @@ var Provider = toolsdk.Register( //nolint:gochecknoglobals // registration runs 
 	},
 )
 
+// gitHealthCheck verifies the tool's one external dependency: every query the
+// checker makes is a git invocation.
 func gitHealthCheck(_ context.Context) error {
 	if _, err := exec.LookPath("git"); err != nil {
-		return errorfamily.WrapInfrastructuref(
-			err, "binary_checker.git", "binary-check requires git on PATH",
-		)
+		return errorfamily.Wrapf(err, errorfamily.Infrastructure, errorfamily.Code(binarycheck.ErrGitMissing),
+			"binary-check requires git on PATH")
 	}
 
 	return nil
@@ -67,7 +71,7 @@ func (d *suppressionFilteringDetector) Name() string { return d.inner.Name() }
 func (d *suppressionFilteringDetector) Detect(ctx context.Context) ([]finding.Finding, error) {
 	findings, err := d.inner.Detect(ctx)
 	if err != nil {
-		return nil, errorfamily.WrapInfrastructuref(err, binarycheck.ToolName, "scan for tracked binaries")
+		return nil, classified(err)
 	}
 
 	return activeFindings(findings), nil
@@ -76,7 +80,7 @@ func (d *suppressionFilteringDetector) Detect(ctx context.Context) ([]finding.Fi
 func (d *suppressionFilteringDetector) DetectV2(ctx context.Context) (finding.DetectResult, error) {
 	result, err := finding.RunDetect(ctx, d.inner)
 	if err != nil {
-		return result, errorfamily.WrapInfrastructuref(err, binarycheck.ToolName, "scan for tracked binaries")
+		return result, classified(err)
 	}
 
 	result.Findings = activeFindings(result.Findings)
@@ -84,24 +88,16 @@ func (d *suppressionFilteringDetector) DetectV2(ctx context.Context) (finding.De
 	return result, nil
 }
 
+// classified passes an already-classified error through unchanged. Wrapping it
+// again would stack a second code on top and hide the condition underneath.
+func classified(err error) error {
+	return errorfamily.WrapOncef(err, errorfamily.Infrastructure, codeDetect, "scan for tracked binaries")
+}
+
+// activeFindings returns the findings not silenced by config, in report order.
 func activeFindings(findings []finding.Finding) []finding.Finding {
-	active := make([]finding.Finding, 0, len(findings))
-
-	for _, item := range findings {
-		if item.IsSuppressed() {
-			continue
-		}
-
-		active = append(active, item)
-	}
-
-	sort.Slice(active, func(i, j int) bool {
-		if active[i].Position.File != active[j].Position.File {
-			return active[i].Position.File < active[j].Position.File
-		}
-
-		return active[i].Rule < active[j].Rule
-	})
+	active := finding.Filter(findings, finding.NotSuppressed)
+	binarycheck.SortFindings(active)
 
 	return active
 }

@@ -3,6 +3,8 @@ package binarycheck
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/larsartmann/go-finding"
 	linter "github.com/larsartmann/go-linter-sdk"
@@ -12,49 +14,71 @@ import (
 // BuildFlow registration.
 const ToolName = "binary-check"
 
-// Stable rule IDs. They never change: suppressions, ignore entries, and
-// baselines key on them.
+// RuleID is the stable identifier of a rule. Ignore entries, baselines, and
+// suppressions key on it, so the values never change.
+type RuleID string
+
 const (
 	// RuleTrackedBinary reports a tracked file whose content is binary.
-	RuleTrackedBinary = "BC001"
+	RuleTrackedBinary RuleID = "BC001"
 	// RuleTrackedPattern reports a tracked file matching a binary artifact
 	// pattern whose content reads as text.
-	RuleTrackedPattern = "BC002"
+	RuleTrackedPattern RuleID = "BC002"
 	// RuleTrackedIgnored reports a tracked file that also matches .gitignore.
-	RuleTrackedIgnored = "BC003"
+	RuleTrackedIgnored RuleID = "BC003"
 )
 
 // Finding tags. Shared vocabulary so every rule that concerns git-tracked
 // artifacts carries the same labels.
 const (
-	tagGit           finding.Tag = "git"
-	tagBinary        finding.Tag = "binary"
-	tagBuildArtifact finding.Tag = "build-artifact"
-	tagBestPractice  finding.Tag = "best-practice"
+	tagGit               finding.Tag = "git"
+	tagBinary            finding.Tag = "binary"
+	tagBuildArtifact     finding.Tag = "build-artifact"
+	tagBestPractice      finding.Tag = "best-practice"
+	tagRepositoryHygiene finding.Tag = "repository-hygiene"
+	tagRuleConfiguration finding.Tag = "configuration"
 )
 
+// Metadata keys on a finding. Namespaced with the tool name, as go-finding
+// asks, so they cannot collide with another tool's keys.
+const (
+	metadataSize     = "binary-check.size"
+	metadataEvidence = "binary-check.evidence"
+	metadataPattern  = "binary-check.pattern"
+)
+
+// ruleSpec declares one rule: its identity in the registry and how a finding
+// for it reads. A rule is data, so adding one adds an entry, not a branch.
 type ruleSpec struct {
-	id          string
+	id          RuleID
 	name        string
 	description string
-	category    string
+	category    linter.Category
 	severity    finding.Severity
 	confidence  finding.Confidence
 	tags        []finding.Tag
-	message     func(fileInspection) string
-	suggestion  func(string) string
 	optIn       bool
+	// confidenceOf overrides confidence per finding; nil keeps confidence.
+	confidenceOf func(fileInspection) finding.Confidence
+	message      func(fileInspection) string
+	suggestion   func(path string) string
+	// metadataOf adds rule-specific facts to each finding; nil adds none.
+	metadataOf func(fileInspection) map[string]string
 }
 
-var ruleTable = []*ruleSpec{ //nolint:gochecknoglobals // static rule registry
-	{
+var ( //nolint:gochecknoglobals // the rule registry is static by definition
+	ruleTrackedBinary = &ruleSpec{
 		id:          RuleTrackedBinary,
 		name:        "tracked binary file",
 		description: "A git-tracked file contains binary data (NUL byte or low printable-text ratio). Build artifacts must not be committed.",
-		category:    string(linter.CategoryBestPractice),
+		category:    linter.CategoryBestPractice,
 		severity:    finding.SeverityError,
 		confidence:  finding.ConfidenceFull,
 		tags:        []finding.Tag{tagGit, tagBinary, tagBuildArtifact, tagBestPractice},
+		confidenceOf: func(inspection fileInspection) finding.Confidence {
+			return verdictConfidence(inspection.verdict)
+		},
+		metadataOf: inspectionMetadata,
 		message: func(inspection fileInspection) string {
 			message := fmt.Sprintf(
 				"tracked binary file %q (%d bytes; detected by %s)",
@@ -75,15 +99,17 @@ var ruleTable = []*ruleSpec{ //nolint:gochecknoglobals // static rule registry
 				path,
 			)
 		},
-	},
-	{
+	}
+
+	ruleTrackedPattern = &ruleSpec{
 		id:          RuleTrackedPattern,
 		name:        "tracked binary artifact with text content",
 		description: "A git-tracked file matches a binary artifact pattern but its content reads as text, which usually means an empty or placeholder artifact was committed.",
-		category:    string(linter.CategoryBestPractice),
+		category:    linter.CategoryBestPractice,
 		severity:    finding.SeverityWarning,
 		confidence:  finding.ConfidenceMedium,
 		tags:        []finding.Tag{tagGit, tagBinary, tagBuildArtifact, tagBestPractice},
+		metadataOf:  inspectionMetadata,
 		message: func(inspection fileInspection) string {
 			return fmt.Sprintf(
 				"tracked file %q matches binary artifact pattern %q but its content reads as text",
@@ -97,32 +123,44 @@ var ruleTable = []*ruleSpec{ //nolint:gochecknoglobals // static rule registry
 				path,
 			)
 		},
-	},
-	{
+	}
+
+	ruleTrackedIgnored = &ruleSpec{
 		id:          RuleTrackedIgnored,
 		name:        "tracked file matches .gitignore",
 		description: "A file is tracked even though .gitignore matches it. Git ignores apply only to untracked files, so the ignore rule is silently inert until the file is untracked.",
-		category:    string(linter.CategoryConfiguration),
+		category:    linter.CategoryConfiguration,
 		severity:    finding.SeverityWarning,
 		confidence:  finding.ConfidenceFull,
-		tags:        []finding.Tag{"git", "repository-hygiene", "configuration"},
+		tags:        []finding.Tag{tagGit, tagRepositoryHygiene, tagRuleConfiguration},
 		optIn:       true,
-	},
-}
-
-func ruleByID(id string) *ruleSpec {
-	for _, rule := range ruleTable {
-		if rule.id == id {
-			return rule
-		}
+		message: func(inspection fileInspection) string {
+			return fmt.Sprintf(
+				"tracked file %q matches .gitignore; ignore rules do not apply to tracked files",
+				inspection.file.Path,
+			)
+		},
+		suggestion: func(path string) string {
+			return fmt.Sprintf("untrack it with `git rm --cached %s`", path)
+		},
 	}
 
-	return nil
+	// ruleTable lists every rule in registry order.
+	ruleTable = []*ruleSpec{ruleTrackedBinary, ruleTrackedPattern, ruleTrackedIgnored}
+)
+
+// inspectionMetadata records what the content inspection measured.
+func inspectionMetadata(inspection fileInspection) map[string]string {
+	return map[string]string{
+		metadataSize:     strconv.FormatInt(inspection.size, 10),
+		metadataEvidence: string(inspection.verdict.Evidence),
+		metadataPattern:  inspection.pattern,
+	}
 }
 
 // AllRuleIDs returns every rule ID in registry order.
-func AllRuleIDs() []string {
-	ids := make([]string, 0, len(ruleTable))
+func AllRuleIDs() []RuleID {
+	ids := make([]RuleID, 0, len(ruleTable))
 	for _, rule := range ruleTable {
 		ids = append(ids, rule.id)
 	}
@@ -130,7 +168,18 @@ func AllRuleIDs() []string {
 	return ids
 }
 
-// Rules builds the rule set over one shared Checker.
+// JoinRuleIDs lists rule IDs comma-separated, for messages that name them.
+func JoinRuleIDs(ids []RuleID) string {
+	parts := make([]string, len(ids))
+	for index, id := range ids {
+		parts[index] = string(id)
+	}
+
+	return strings.Join(parts, ", ")
+}
+
+// Rules builds the rule set over one shared Checker. Every rule is included,
+// opt-in ones too: selecting which rules run is the caller's decision.
 func Rules(checker *Checker) []linter.Rule {
 	rules := make([]linter.Rule, 0, len(ruleTable))
 
@@ -138,10 +187,10 @@ func Rules(checker *Checker) []linter.Rule {
 		rule := checkerRule{
 			checker: checker,
 			Meta: linter.RuleMeta{
-				ID:          spec.id,
+				ID:          string(spec.id),
 				Name:        spec.name,
 				Description: spec.description,
-				Cat:         linter.Category(spec.category),
+				Cat:         spec.category,
 				Sev:         spec.severity,
 				ToolName:    finding.ToolName(ToolName),
 			},
@@ -176,6 +225,8 @@ func NewRegistry(checker *Checker) *linter.Registry {
 	return registry
 }
 
+// checkerRule is one rule of the registry. It keeps a handle on the shared
+// Checker so every rule reads the same memoized scan.
 type checkerRule struct {
 	linter.RuleFunc
 
@@ -185,34 +236,30 @@ type checkerRule struct {
 // Coverage reports how many tracked files the shared scan inspected.
 func (r checkerRule) Coverage(ctx context.Context, dir string) (int, []string) {
 	result, err := r.checker.Scan(ctx, dir)
-	if err != nil || result == nil {
+	if err != nil {
 		return 0, nil
 	}
 
 	return result.FilesScanned, nil
 }
 
+// optInRule turns its rule off by default. It wraps checkerRule rather than
+// using linter.OptIn, which accepts a bare RuleFunc and would drop the
+// Coverage method hosts rely on for "clean tree" versus "scanned nothing".
 type optInRule struct {
 	checkerRule
 }
 
 func (optInRule) IsEnabledByDefault() bool { return false }
 
-func ruleRunner(checker *Checker, ruleID string) func(context.Context, string) ([]finding.Finding, error) {
+// ruleRunner narrows the shared scan to one rule's findings.
+func ruleRunner(checker *Checker, ruleID RuleID) func(context.Context, string) ([]finding.Finding, error) {
 	return func(ctx context.Context, dir string) ([]finding.Finding, error) {
 		result, err := checker.Scan(ctx, dir)
 		if err != nil {
 			return nil, err
 		}
 
-		findings := make([]finding.Finding, 0)
-
-		for _, item := range result.Findings {
-			if string(item.Rule) == ruleID {
-				findings = append(findings, item)
-			}
-		}
-
-		return findings, nil
+		return finding.Filter(result.Findings, finding.ByRule(finding.RuleName(ruleID))), nil
 	}
 }

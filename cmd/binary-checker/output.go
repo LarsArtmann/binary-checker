@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
@@ -12,8 +13,6 @@ import (
 	binarycheck "github.com/larsartmann/binary-checker"
 )
 
-const codeOutput = "binary_checker.output"
-
 type reportPartitions struct {
 	actionable []finding.Finding
 	triage     []finding.Finding
@@ -21,6 +20,9 @@ type reportPartitions struct {
 	baselined  []finding.Finding
 }
 
+// partition sorts the report's findings into the groups the CLI shows. The
+// groups are exclusive and checked in order of certainty: a suppression wins
+// over a baseline entry, which wins over the confidence threshold.
 func partition(report *finding.Report, threshold finding.Confidence, base *baseline) reportPartitions {
 	partitions := reportPartitions{
 		actionable: make([]finding.Finding, 0),
@@ -51,56 +53,50 @@ func partition(report *finding.Report, threshold finding.Confidence, base *basel
 	return partitions
 }
 
+// renderHuman writes the report people read. It is composed in memory and
+// written in one step, like the JSON and SARIF renderers, so a failed write
+// surfaces as an error instead of a half-printed report.
 func renderHuman(
 	writer io.Writer,
 	partitions reportPartitions,
 	scan *binarycheck.ScanResult,
 	showSuppressed, showBaselined bool,
-) {
+) error {
+	var report bytes.Buffer
+
 	if len(partitions.actionable) == 0 && len(partitions.triage) == 0 &&
 		(!showSuppressed || len(partitions.suppressed) == 0) &&
 		(!showBaselined || len(partitions.baselined) == 0) {
-		fmt.Fprintln(writer, "No actionable findings.")
+		fmt.Fprintln(&report, "No actionable findings.")
 
 		if len(partitions.baselined) > 0 {
-			fmt.Fprintf(
-				writer,
-				"%d finding(s) accepted by the baseline (use --show-baselined).\n",
-				len(partitions.baselined),
-			)
+			fmt.Fprintf(&report, "%d finding(s) accepted by the baseline (use --show-baselined).\n",
+				len(partitions.baselined))
 		}
 
 		if len(partitions.suppressed) > 0 {
-			fmt.Fprintf(
-				writer,
-				"%d finding(s) suppressed by config (use --show-suppressed).\n",
-				len(partitions.suppressed),
-			)
+			fmt.Fprintf(&report, "%d finding(s) suppressed by config (use --show-suppressed).\n",
+				len(partitions.suppressed))
 		}
 	}
 
-	writeSection(writer, "ACTIONABLE", partitions.actionable)
-	writeSection(writer, "TRIAGE (low confidence)", partitions.triage)
+	writeSection(&report, "ACTIONABLE", partitions.actionable)
+	writeSection(&report, "TRIAGE (low confidence)", partitions.triage)
 
 	if showBaselined {
-		writeSection(writer, "BASELINED", partitions.baselined)
+		writeSection(&report, "BASELINED", partitions.baselined)
 	}
 
 	if showSuppressed {
-		writeSection(writer, "SUPPRESSED", partitions.suppressed)
+		writeSection(&report, "SUPPRESSED", partitions.suppressed)
 	}
 
-	scanned := 0
-
-	exempt := 0
-
+	scanned, exempt := 0, 0
 	if scan != nil {
-		scanned = scan.FilesScanned
-		exempt = scan.ExemptFiles
+		scanned, exempt = scan.FilesScanned, scan.ExemptFiles
 	}
 
-	fmt.Fprintf(
-		writer,
+	fmt.Fprintf(&report,
 		"\n%d tracked file(s) scanned; %d actionable, %d triage, %d baselined, %d suppressed, %d exempt asset(s)\n",
 		scanned,
 		len(partitions.actionable),
@@ -109,14 +105,20 @@ func renderHuman(
 		len(partitions.suppressed),
 		exempt,
 	)
+
+	if _, err := writer.Write(report.Bytes()); err != nil {
+		return errorfamily.WrapInfrastructuref(err, codeOutputWrite, "write human report")
+	}
+
+	return nil
 }
 
-func writeSection(writer io.Writer, title string, findings []finding.Finding) {
+func writeSection(report *bytes.Buffer, title string, findings []finding.Finding) {
 	if len(findings) == 0 {
 		return
 	}
 
-	fmt.Fprintf(writer, "\n%s (%d)\n", title, len(findings))
+	fmt.Fprintf(report, "\n%s (%d)\n", title, len(findings))
 
 	for _, item := range findings {
 		location := string(item.Position.File)
@@ -124,18 +126,11 @@ func writeSection(writer io.Writer, title string, findings []finding.Finding) {
 			location = fmt.Sprintf("%s:%d", item.Position.File, item.Position.Line)
 		}
 
-		fmt.Fprintf(
-			writer,
-			"  %s  %-7s %-6s  %s  %s\n",
-			location,
-			item.Severity,
-			item.Confidence,
-			item.Rule,
-			item.Message,
-		)
+		fmt.Fprintf(report, "  %s  %-7s %-6s  %s  %s\n",
+			location, item.Severity, item.Confidence, item.Rule, item.Message)
 
 		if item.Suggestion != "" {
-			fmt.Fprintf(writer, "      fix: %s\n", item.Suggestion)
+			fmt.Fprintf(report, "      fix: %s\n", item.Suggestion)
 		}
 	}
 }
@@ -168,11 +163,11 @@ func renderJSON(writer io.Writer, partitions reportPartitions, scan *binarycheck
 
 	data, err := json.Marshal(output, jsontext.WithIndentPrefix(""), jsontext.WithIndent("  "))
 	if err != nil {
-		return errorfamily.WrapInfrastructuref(err, codeOutput, "encode JSON report")
+		return errorfamily.WrapOrchestrationf(err, codeOutputEncode, "encode JSON report")
 	}
 
 	if _, err := fmt.Fprintf(writer, "%s\n", data); err != nil {
-		return errorfamily.WrapInfrastructuref(err, codeOutput, "write JSON report")
+		return errorfamily.WrapInfrastructuref(err, codeOutputWrite, "write JSON report")
 	}
 
 	return nil
@@ -190,15 +185,15 @@ func renderSARIF(writer io.Writer, partitions reportPartitions) error {
 
 	data, err := report.ToSARIF()
 	if err != nil {
-		return errorfamily.WrapInfrastructuref(err, codeOutput, "encode SARIF report")
+		return errorfamily.WrapOrchestrationf(err, codeOutputEncode, "encode SARIF report")
 	}
 
 	if _, err := writer.Write(data); err != nil {
-		return errorfamily.WrapInfrastructuref(err, codeOutput, "write SARIF report")
+		return errorfamily.WrapInfrastructuref(err, codeOutputWrite, "write SARIF report")
 	}
 
 	if _, err := fmt.Fprintln(writer); err != nil {
-		return errorfamily.WrapInfrastructuref(err, codeOutput, "write SARIF report")
+		return errorfamily.WrapInfrastructuref(err, codeOutputWrite, "write SARIF report")
 	}
 
 	return nil

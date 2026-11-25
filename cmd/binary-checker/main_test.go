@@ -187,8 +187,8 @@ func TestRunRejectsUnknownRule(t *testing.T) {
 	t.Parallel()
 
 	code, _, stderr := runCLI(t, "--enable", "BC999", ".")
-	if code != exitOperational {
-		t.Fatalf("exit = %d, want %d", code, exitOperational)
+	if code != exitUsage {
+		t.Fatalf("exit = %d, want %d", code, exitUsage)
 	}
 
 	if !strings.Contains(stderr, "unknown rule") {
@@ -202,11 +202,16 @@ func TestRunNotGitRepository(t *testing.T) {
 	dir := t.TempDir()
 
 	code, _, stderr := runCLI(t, dir)
-	if code != exitOperational {
-		t.Fatalf("exit = %d, want %d", code, exitOperational)
+	if code != exitUsage {
+		t.Fatalf("exit = %d, want %d", code, exitUsage)
 	}
 
 	if !strings.Contains(stderr, "not a git repository") {
 		t.Fatalf("stderr = %s", stderr)
+	}
+
+	// The scan fails once; it must be reported once, not once per rule.
+	if reported := strings.Count(stderr, "Error:"); reported != 1 {
+		t.Fatalf("stderr reports the failure %d times: %s", reported, stderr)
 	}
 }

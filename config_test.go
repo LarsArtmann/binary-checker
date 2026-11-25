@@ -1,10 +1,11 @@
 package binarycheck
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+
+	errorfamily "github.com/larsartmann/go-error-family"
 )
 
 func TestLoadConfigDefaultsWhenAbsent(t *testing.T) {
@@ -39,8 +40,8 @@ func TestLoadConfigRejectsUnexplainedIgnore(t *testing.T) {
 	}
 
 	_, err := LoadConfig("", root)
-	if !errors.Is(err, ErrConfig) {
-		t.Fatalf("error = %v, want ErrConfig", err)
+	if errorfamily.Code(err) != codeConfigInvalid {
+		t.Fatalf("code = %q, want %q (error: %v)", errorfamily.Code(err), codeConfigInvalid, err)
 	}
 }
 
@@ -57,8 +58,9 @@ func TestLoadConfigRejectsUnknownField(t *testing.T) {
 	}
 
 	_, err := LoadConfig("", root)
-	if !errors.Is(err, ErrConfig) {
-		t.Fatalf("error = %v, want ErrConfig (typo must not pass silently)", err)
+	if errorfamily.Code(err) != codeConfigParse {
+		t.Fatalf("code = %q, want %q: a typo must not pass silently (error: %v)",
+			errorfamily.Code(err), codeConfigParse, err)
 	}
 }
 
@@ -75,8 +77,8 @@ func TestLoadConfigRejectsUnknownRule(t *testing.T) {
 	}
 
 	_, err := LoadConfig("", root)
-	if !errors.Is(err, ErrConfig) {
-		t.Fatalf("error = %v, want ErrConfig", err)
+	if errorfamily.Code(err) != codeConfigInvalid {
+		t.Fatalf("code = %q, want %q (error: %v)", errorfamily.Code(err), codeConfigInvalid, err)
 	}
 }
 
@@ -86,8 +88,8 @@ func TestLoadConfigExplicitPathMustExist(t *testing.T) {
 	root := t.TempDir()
 
 	_, err := LoadConfig(filepath.Join(root, "missing.json"), root)
-	if !errors.Is(err, ErrConfig) {
-		t.Fatalf("error = %v, want ErrConfig", err)
+	if errorfamily.Code(err) != codeConfigOpen {
+		t.Fatalf("code = %q, want %q (error: %v)", errorfamily.Code(err), codeConfigOpen, err)
 	}
 }
 
@@ -95,7 +97,7 @@ func TestSuppressionReasonRespectsRuleScope(t *testing.T) {
 	t.Parallel()
 
 	config := Config{Ignore: []IgnoreEntry{
-		{Path: "fixtures/**", Reason: "binary fixture corpus", Rules: []string{RuleTrackedBinary}},
+		{Path: "fixtures/**", Reason: "binary fixture corpus", Rules: []RuleID{RuleTrackedBinary}},
 	}}
 
 	if _, ok := config.SuppressionReason("fixtures/sample.bin", RuleTrackedBinary); !ok {
@@ -107,7 +109,7 @@ func TestSuppressionReasonRespectsRuleScope(t *testing.T) {
 	}
 }
 
-func TestConfigUnlimitedExemption(t *testing.T) {
+func TestConfigExplicitZeroCeilingIsRespected(t *testing.T) {
 	t.Parallel()
 
 	allowed := true

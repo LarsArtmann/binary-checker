@@ -2,33 +2,20 @@ package binarycheck
 
 import (
 	"context"
-	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
-	"sort"
-	"strconv"
 	"sync"
 
-	errorfamily "github.com/larsartmann/go-error-family"
 	"github.com/larsartmann/go-finding"
 )
 
-const (
-	maxScanWorkers = 8
-	codeScan       = "binary_checker.scan"
-	codeRule       = "binary_checker.rule"
+const maxScanWorkers = 8
 
-	// codeScanInterrupted names a scan the caller ended before it finished.
-	codeScanInterrupted = "scan.interrupted"
-)
-
-// ScanResult is one repository scan. Findings are sorted by path, line, then
-// rule so every output format is deterministic.
+// ScanResult is one repository scan. Findings are sorted by position, then
+// rule, so every output format is deterministic.
 type ScanResult struct {
 	// Root is the git work-tree root that was scanned.
 	Root string
-	// FilesScanned counts tracked files whose content was inspected.
+	// FilesScanned counts tracked files the scan examined, exempt ones
+	// included.
 	FilesScanned int
 	// FilesSkipped counts index entries that could not be inspected (missing
 	// from the working tree, unreadable, symlink, submodule).
@@ -40,12 +27,13 @@ type ScanResult struct {
 	// Suppressed counts findings silenced by .binary-checker.json ignore
 	// entries. They remain in Findings with Suppression attached.
 	Suppressed int
-	// Findings contains one finding per offending file per rule.
+	// Findings contains one finding per offending file per rule, so a file
+	// can carry several.
 	Findings []finding.Finding
 }
 
-// Checker scans repositories. A checker memoizes scans per directory so the
-// rules of one registry run share a single git walk and content pass.
+// Checker scans repositories. A checker memoizes the result per repository,
+// so the rules of one registry run share a single git walk and content pass.
 type Checker struct {
 	configPath string
 
@@ -73,49 +61,51 @@ func NewChecker(opts ...CheckerOption) *Checker {
 	return checker
 }
 
-// Scan inspects every tracked file under dir's git work tree.
+// Scan inspects every tracked file under dir's git work tree. The result is
+// memoized per work tree: scanning a subdirectory of a repository already
+// scanned returns that repository's result.
 func (c *Checker) Scan(ctx context.Context, dir string) (*ScanResult, error) {
 	if dir == "" {
 		dir = "."
 	}
 
-	key, err := filepath.Abs(dir)
+	git, err := newGitClient(ctx, dir)
 	if err != nil {
-		return nil, errorfamily.WrapInfrastructuref(err, codeScan, "resolve scan directory %q", dir)
+		return nil, err
 	}
 
 	c.mu.Lock()
-	cached, ok := c.cache[key]
+	cached, ok := c.cache[git.root]
 	c.mu.Unlock()
 
 	if ok {
 		return cached, nil
 	}
 
-	result, err := c.scan(ctx, dir)
+	result, err := c.scan(ctx, git)
 	if err != nil {
 		return nil, err
 	}
 
 	c.mu.Lock()
-	c.cache[key] = result
+	c.cache[git.root] = result
 	c.mu.Unlock()
 
 	return result, nil
 }
 
-func (c *Checker) scan(ctx context.Context, dir string) (*ScanResult, error) {
-	git, err := newGitClient(ctx, dir)
-	if err != nil {
-		return nil, err
-	}
-
+func (c *Checker) scan(ctx context.Context, git *gitClient) (*ScanResult, error) {
 	config, err := LoadConfig(c.configPath, git.root)
 	if err != nil {
 		return nil, err
 	}
 
-	tracked, indexSkipped, err := git.tracked(ctx)
+	tracked, contentLess, err := git.tracked(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	lfs, err := git.lfsPaths(ctx, trackedPaths(tracked))
 	if err != nil {
 		return nil, err
 	}
@@ -125,46 +115,23 @@ func (c *Checker) scan(ctx context.Context, dir string) (*ScanResult, error) {
 		return nil, err
 	}
 
-	paths := make([]string, len(tracked))
-	for i, file := range tracked {
-		paths[i] = file.Path
-	}
-
-	lfs, err := git.lfsPaths(ctx, paths)
-	if err != nil {
-		return nil, err
-	}
-
 	inspections, err := inspectAll(ctx, git.root, tracked, config, lfs)
 	if err != nil {
 		return nil, err
 	}
 
-	result := &ScanResult{Root: git.root, FilesSkipped: indexSkipped}
+	result := &ScanResult{Root: git.root, FilesSkipped: contentLess}
 
 	for _, inspection := range inspections {
-		if collectErr := c.collectInspection(config, result, inspection); collectErr != nil {
-			return nil, collectErr
+		if err := result.collect(config, inspection); err != nil {
+			return nil, err
 		}
 	}
 
-	// BC003 answers a different question than BC001 and BC002 ("is this file
-	// supposed to be ignored?" rather than "is it binary?"), so every
-	// tracked-but-ignored path is reported, whether or not another rule already
-	// flagged the file. Skipping flagged files would let --disable BC002 hide a
-	// BC003 finding the user explicitly asked for.
 	for _, path := range trackedIgnored {
-		reason, suppressed := config.SuppressionReason(path, RuleTrackedIgnored)
-		if suppressed {
-			result.Suppressed++
+		if err := result.collectTrackedIgnored(config, path); err != nil {
+			return nil, err
 		}
-
-		item, buildErr := buildIgnoredFinding(path, reason)
-		if buildErr != nil {
-			return nil, buildErr
-		}
-
-		result.Findings = append(result.Findings, item)
 	}
 
 	SortFindings(result.Findings)
@@ -172,278 +139,76 @@ func (c *Checker) scan(ctx context.Context, dir string) (*ScanResult, error) {
 	return result, nil
 }
 
-// collectInspection records one inspection in result: the reason a clean file
-// was not flagged, or the finding an offending file produced.
-func (c *Checker) collectInspection(config Config, result *ScanResult, inspection fileInspection) error {
-	ruleID, matched := c.ruleForInspection(inspection)
-	if !matched {
-		result.accountUnflagged(inspection)
+func trackedPaths(files []trackedFile) []string {
+	paths := make([]string, len(files))
+	for index, file := range files {
+		paths[index] = file.Path
+	}
+
+	return paths
+}
+
+// collect records one inspection: why a clean file was not flagged, or the
+// finding an offending file produced.
+func (r *ScanResult) collect(config Config, inspection fileInspection) error {
+	rule := ruleForInspection(inspection)
+	if rule == nil {
+		r.accountUnflagged(inspection)
 
 		return nil
 	}
 
-	result.FilesScanned++
+	r.FilesScanned++
 
-	reason, suppressed := config.SuppressionReason(inspection.file.Path, ruleID)
+	reason, suppressed := config.SuppressionReason(inspection.file.Path, rule.id)
 	if suppressed {
-		result.Suppressed++
+		r.Suppressed++
 	}
 
-	item, buildErr := buildFinding(ruleID, inspection, reason)
-	if buildErr != nil {
-		return errorfamily.WrapCorruptionf(
-			buildErr, codeRule, "collect %s finding for %q", ruleID, inspection.file.Path,
-		)
+	item, err := buildFinding(rule, inspection, reason)
+	if err != nil {
+		return err
 	}
 
-	result.Findings = append(result.Findings, item)
+	r.Findings = append(r.Findings, item)
 
 	return nil
 }
 
 // accountUnflagged records why an inspection produced no finding.
 func (r *ScanResult) accountUnflagged(inspection fileInspection) {
-	switch {
-	case inspection.skip:
+	switch inspection.disposition {
+	case dispositionSkipped:
 		r.FilesSkipped++
-	case inspection.lfs:
+	case dispositionLFS:
 		r.LFSFiles++
+	case dispositionExempt:
+		r.FilesScanned++
+		r.ExemptFiles++
 	default:
 		r.FilesScanned++
 	}
-
-	if inspection.exempt {
-		r.ExemptFiles++
-	}
 }
 
-// ruleForInspection decides which (if any) rule an inspected file violates.
-func (c *Checker) ruleForInspection(inspection fileInspection) (string, bool) {
-	switch {
-	case inspection.skip || inspection.lfs || inspection.exempt:
-		return "", false
-	case inspection.verdict.Binary:
-		return RuleTrackedBinary, true
-	case inspection.pattern != "":
-		return RuleTrackedPattern, true
-	default:
-		return "", false
-	}
-}
-
-type fileInspection struct {
-	file    trackedFile
-	size    int64
-	verdict ContentVerdict
-	pattern string
-	lfs     bool
-	exempt  bool
-	skip    bool
-}
-
-// inspectAll inspects every tracked file with a bounded worker pool. It fails
-// when the context ends first: the files it never looked at must not come
-// back as "skipped" inside an otherwise successful result.
-func inspectAll(
-	ctx context.Context,
-	root string,
-	files []trackedFile,
-	config Config,
-	lfs map[string]bool,
-) ([]fileInspection, error) {
-	workers := max(min(runtime.NumCPU(), maxScanWorkers), 1)
-
-	inspections := make([]fileInspection, len(files))
-	jobs := make(chan int)
-
-	var waitGroup sync.WaitGroup
-	for range workers {
-		waitGroup.Go(func() {
-			for index := range jobs {
-				inspections[index] = inspectFile(ctx, root, files[index], config, lfs)
-			}
-		})
+// collectTrackedIgnored records the BC003 finding for one tracked-but-ignored
+// path.
+//
+// Every such path is reported, whether or not another rule already flagged the
+// file: BC003 answers a different question ("should this file be ignored?"),
+// and skipping flagged files would let --disable BC002 hide a BC003 finding
+// the user explicitly asked for.
+func (r *ScanResult) collectTrackedIgnored(config Config, path string) error {
+	reason, suppressed := config.SuppressionReason(path, RuleTrackedIgnored)
+	if suppressed {
+		r.Suppressed++
 	}
 
-	for index := range files {
-		if ctx.Err() != nil {
-			break
-		}
-
-		jobs <- index
-	}
-
-	close(jobs)
-	waitGroup.Wait()
-
-	if err := ctx.Err(); err != nil {
-		return nil, errorfamily.Wrapf(err, errorfamily.Classify(err), codeScanInterrupted,
-			"inspect tracked files under %q", root)
-	}
-
-	return inspections, nil
-}
-
-func inspectFile(
-	ctx context.Context,
-	root string,
-	file trackedFile,
-	config Config,
-	lfs map[string]bool,
-) fileInspection {
-	inspection := fileInspection{file: file}
-
-	if ctx.Err() != nil {
-		inspection.skip = true
-
-		return inspection
-	}
-
-	if lfs[file.Path] {
-		inspection.lfs = true
-
-		return inspection
-	}
-
-	absolute := filepath.Join(root, filepath.FromSlash(file.Path))
-
-	info, err := os.Stat(absolute)
-	if err != nil || info.IsDir() {
-		inspection.skip = true
-
-		return inspection
-	}
-
-	inspection.size = info.Size()
-	inspection.pattern = MatchBinaryArtifact(file.Path)
-
-	if inspection.size == 0 {
-		return inspection
-	}
-
-	sample, err := ReadSample(absolute)
+	item, err := buildFinding(ruleTrackedIgnored, fileInspection{file: trackedFile{Path: path}}, reason)
 	if err != nil {
-		inspection.skip = true
-
-		return inspection
+		return err
 	}
 
-	inspection.verdict = ClassifyContent(sample)
-	inspection.exempt = isExemptAsset(file.Path, inspection.size, config)
+	r.Findings = append(r.Findings, item)
 
-	return inspection
-}
-
-func isExemptAsset(relPath string, size int64, config Config) bool {
-	if IsFont(relPath) && config.AllowFontsEnabled() && size <= config.FontCeiling() {
-		return true
-	}
-
-	return IsSmallImage(relPath) && config.AllowSmallImagesEnabled() && size <= config.SmallImageCeiling()
-}
-
-// SortFindings orders findings by path, line, then rule so every output format
-// is deterministic regardless of scan order.
-func SortFindings(findings []finding.Finding) {
-	sort.Slice(findings, func(i, j int) bool {
-		left, right := findings[i], findings[j]
-
-		if left.Position.File != right.Position.File {
-			return left.Position.File < right.Position.File
-		}
-
-		if left.Position.Line != right.Position.Line {
-			return left.Position.Line < right.Position.Line
-		}
-
-		return left.Rule < right.Rule
-	})
-}
-
-func buildFinding(ruleID string, inspection fileInspection, suppressionReason string) (finding.Finding, error) {
-	rule := ruleByID(ruleID)
-	if rule == nil {
-		return finding.Finding{}, errorfamily.Newf(errorfamily.Corruption,
-			codeRule, "unknown rule %q while building finding for %q (suppression reason=%q)",
-			ruleID, inspection.file.Path, suppressionReason,
-		)
-	}
-
-	confidence := rule.confidence
-	if ruleID == RuleTrackedBinary && inspection.verdict.Evidence != "nul-byte" {
-		confidence = finding.ConfidenceHigh
-	}
-
-	builder := finding.NewBuilder(
-		finding.RuleName(ruleID),
-		finding.ToolName(ToolName),
-		rule.message(inspection),
-		rule.severity,
-		finding.FilePos(finding.FilePath(inspection.file.Path)),
-	).
-		WithCategory(finding.Category(rule.category)).
-		WithConfidence(confidence).
-		WithFixStrategy(finding.FixStrategyNone).
-		WithSuggestion(rule.suggestion(inspection.file.Path)).
-		WithTags(rule.tags...).
-		WithMetadata(map[string]string{
-			"binary-check.size":     strconv.FormatInt(inspection.size, 10),
-			"binary-check.evidence": inspection.verdict.Evidence,
-			"binary-check.pattern":  inspection.pattern,
-		})
-
-	if suppressionReason != "" {
-		builder = builder.WithSuppression(finding.Suppression{
-			Kind:   finding.SuppressionInConfig,
-			Rule:   finding.RuleName(ruleID),
-			Reason: suppressionReason,
-		})
-	}
-
-	item, err := builder.Build()
-	if err != nil {
-		return finding.Finding{}, errorfamily.WrapCorruptionf(err, codeRule, "build finding")
-	}
-
-	return item, nil
-}
-
-func buildIgnoredFinding(path, suppressionReason string) (finding.Finding, error) {
-	rule := ruleByID(RuleTrackedIgnored)
-	if rule == nil {
-		return finding.Finding{}, errorfamily.Newf(errorfamily.Corruption,
-			codeRule, "unknown rule %q while building %q (suppression reason=%q)",
-			RuleTrackedIgnored, path, suppressionReason,
-		)
-	}
-
-	builder := finding.NewBuilder(
-		finding.RuleName(RuleTrackedIgnored),
-		finding.ToolName(ToolName),
-		fmt.Sprintf("tracked file %q matches .gitignore; ignore rules do not apply to tracked files", path),
-		rule.severity,
-		finding.FilePos(finding.FilePath(path)),
-	).
-		WithCategory(finding.Category(rule.category)).
-		WithConfidence(rule.confidence).
-		WithFixStrategy(finding.FixStrategyNone).
-		WithSuggestion(fmt.Sprintf("untrack it with `git rm --cached %s`", path)).
-		WithTags(rule.tags...)
-
-	if suppressionReason != "" {
-		builder = builder.WithSuppression(finding.Suppression{
-			Kind:   finding.SuppressionInConfig,
-			Rule:   finding.RuleName(RuleTrackedIgnored),
-			Reason: suppressionReason,
-		})
-	}
-
-	item, err := builder.Build()
-	if err != nil {
-		return finding.Finding{}, errorfamily.WrapCorruptionf(
-			err, codeRule, "build %s finding for %q", RuleTrackedIgnored, path,
-		)
-	}
-
-	return item, nil
+	return nil
 }
