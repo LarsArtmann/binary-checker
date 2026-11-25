@@ -11,10 +11,10 @@ permissions:
 
 jobs:
   check:
-    # The self-hosted runner exposes the `native:host` label and executes steps
+    # The self-hosted runner exposes the `native` label (host backend) and executes steps
     # directly on the host, so the workflow uses the host toolchain instead of
     # container-only GitHub actions.
-    runs-on: native:host
+    runs-on: native
     steps:
       - name: Toolchain
         run: |
