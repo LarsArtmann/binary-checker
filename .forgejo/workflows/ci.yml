@@ -3,57 +3,37 @@ name: CI
 on:
   push:
     branches:
-      - main
+      - master
   pull_request:
 
 permissions:
   contents: read
 
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  build:
-    name: Build and vet
-    runs-on: ubuntu-latest
+  check:
+    # The self-hosted runner exposes the `native:host` label and executes steps
+    # directly on the host, so the workflow uses the host toolchain instead of
+    # container-only GitHub actions.
+    runs-on: native:host
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-      - run: go build ./...
-      - run: go vet ./...
+      - name: Toolchain
+        run: |
+          go version
+          golangci-lint --version
 
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-      - run: go test -race -count=1 ./...
+      - name: Build and vet
+        run: |
+          go build ./...
+          go vet ./...
 
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-      - uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
+      - name: Test
+        run: go test -race -count=1 ./...
 
-  nix:
-    name: Nix build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: DeterminateSystems/nix-installer-action@main
-      - run: nix build . --print-build-logs
+      - name: Lint
+        run: golangci-lint run ./...
+
+      - name: Nix build (compiles and runs the suite in the sandbox)
+        run: nix build . --print-build-logs
+
+      - name: Self-scan
+        run: go run ./cmd/binary-checker .
