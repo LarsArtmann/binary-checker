@@ -3,6 +3,8 @@ package binarycheck
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/larsartmann/binary-checker/internal/gittest"
@@ -88,5 +90,72 @@ func TestInspectAllFailsOnCancelledContext(t *testing.T) {
 
 	if inspections != nil {
 		t.Fatalf("a cancelled inspection pass must not return inspections, got %+v", inspections)
+	}
+}
+
+// The LFS attribute lookup degrades silently when git cannot answer, but a
+// cancelled context is the caller ending the scan and must still surface.
+func TestLFSPathsDistinguishesCancellationFromGitFailure(t *testing.T) {
+	t.Parallel()
+
+	dir := gittest.NewRepo(t)
+	gittest.WriteFile(t, dir, ".gitattributes", []byte("*.psd filter=lfs\n"))
+	gittest.WriteFile(t, dir, "source.psd", []byte{0x38, 0x42, 0x50, 0x53, 0x00})
+	gittest.AddFiles(t, dir, ".gitattributes", "source.psd")
+
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	lfs, err := (&gitClient{root: dir}).lfsPaths(cancelled, []string{"source.psd"})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want one wrapping context.Canceled", err)
+	}
+
+	if lfs != nil {
+		t.Fatalf("a cancelled lookup must not return a partial map, got %v", lfs)
+	}
+
+	// A root that is not a repository makes git fail outright: that is the
+	// documented degradation, reported as "no LFS knowledge", not as an error.
+	lfs, err = (&gitClient{root: t.TempDir()}).lfsPaths(context.Background(), []string{"source.psd"})
+	if err != nil {
+		t.Fatalf("a failing attribute lookup must degrade, got %v", err)
+	}
+
+	if lfs != nil {
+		t.Fatalf("a failed lookup must yield no LFS knowledge, got %v", lfs)
+	}
+}
+
+// BC003 is defined over the repository's .gitignore files. A rule that only
+// exists in a personal ignore file (.git/info/exclude, the user's global
+// ignore file) must not turn into a finding, or the same commit would be
+// clean on one machine and flagged on the next.
+func TestScanIgnoresPersonalIgnoreRules(t *testing.T) {
+	personal := t.TempDir()
+
+	if err := os.MkdirAll(filepath.Join(personal, "git"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(personal, "git", "ignore"), []byte("*.zip\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// t.Setenv is process-wide, which is exactly what the scanner's own git
+	// child processes inherit; this test therefore cannot run in parallel.
+	t.Setenv("XDG_CONFIG_HOME", personal)
+
+	dir := gittest.NewRepo(t)
+
+	gittest.WriteFile(t, dir, "bundle.zip", []byte("not really a zip"))
+	gittest.WriteFile(t, dir, "notes.log", []byte("log line\n"))
+	gittest.WriteFile(t, dir, ".git/info/exclude", []byte("*.log\n"))
+	gittest.AddFiles(t, dir, "bundle.zip", "notes.log")
+
+	result := scanRepo(t, dir)
+
+	if ignored := findingsByRule(result, RuleTrackedIgnored); len(ignored) != 0 {
+		t.Fatalf("personal ignore rules must not produce BC003 findings, got %d", len(ignored))
 	}
 }

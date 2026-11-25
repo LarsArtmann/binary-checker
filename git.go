@@ -122,9 +122,16 @@ func (g *gitClient) tracked(ctx context.Context) ([]trackedFile, int, error) {
 	return files, len(skipped), nil
 }
 
-// trackedIgnored returns files that are tracked despite matching .gitignore.
+// trackedIgnored returns files that are tracked despite matching a .gitignore
+// file in the repository.
+//
+// Only the repository's own ignore rules count. `--exclude-standard` would
+// also apply .git/info/exclude and the user's global ignore file, which are
+// personal to one clone: the same commit would then produce different
+// findings on different machines.
 func (g *gitClient) trackedIgnored(ctx context.Context) ([]string, error) {
-	output, err := runGit(ctx, g.root, "ls-files", "--cached", "--ignored", "--exclude-standard", "-z")
+	output, err := runGit(ctx, g.root,
+		"ls-files", "--cached", "--ignored", "--exclude-per-directory=.gitignore", "-z")
 	if err != nil {
 		return nil, classifyGit(ctx, err, errorfamily.Infrastructure, codeGitIgnoredUnreadable,
 			"list tracked-but-ignored files in %q", g.root)
