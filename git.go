@@ -3,17 +3,21 @@ package binarycheck
 import (
 	"bytes"
 	"context"
-	"errors"
-	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	errorfamily "github.com/larsartmann/go-error-family"
 )
+
+const codeGit = "binary_checker.git"
 
 // ErrNotGitRepository reports that the scan target is not inside a git work
 // tree. Binary checking is defined over git's index, so there is nothing
 // honest to scan without one.
-var ErrNotGitRepository = errors.New("not a git repository (or any parent up to the filesystem root)")
+var ErrNotGitRepository error = errorfamily.NewInfrastructure(
+	codeGit, "not a git repository (or any parent up to the filesystem root)",
+)
 
 // trackedFile is one stage-0 entry from the git index.
 type trackedFile struct {
@@ -41,12 +45,12 @@ func newGitClient(ctx context.Context, dir string) (*gitClient, error) {
 func discoverGitRoot(ctx context.Context, dir string) (string, error) {
 	output, err := runGit(ctx, dir, "rev-parse", "--show-toplevel")
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrNotGitRepository, err)
+		return "", errorfamily.WrapInfrastructuref(err, codeGit, "discover work tree for %q", dir)
 	}
 
 	root := strings.TrimSpace(string(output))
 	if root == "" {
-		return "", ErrNotGitRepository
+		return "", errorfamily.WrapInfrastructuref(ErrNotGitRepository, codeGit, "discover work tree for %q", dir)
 	}
 
 	return filepath.Clean(root), nil
@@ -57,7 +61,7 @@ func discoverGitRoot(ctx context.Context, dir string) (string, error) {
 func (g *gitClient) tracked(ctx context.Context) ([]trackedFile, int, error) {
 	output, err := runGit(ctx, g.root, "ls-files", "--stage", "-z")
 	if err != nil {
-		return nil, 0, fmt.Errorf("list tracked files: %w", err)
+		return nil, 0, errorfamily.WrapInfrastructuref(err, codeGit, "list tracked files")
 	}
 
 	var files []trackedFile
@@ -103,7 +107,7 @@ func (g *gitClient) tracked(ctx context.Context) ([]trackedFile, int, error) {
 func (g *gitClient) trackedIgnored(ctx context.Context) ([]string, error) {
 	output, err := runGit(ctx, g.root, "ls-files", "--cached", "--ignored", "--exclude-standard", "-z")
 	if err != nil {
-		return nil, fmt.Errorf("list tracked-but-ignored files: %w", err)
+		return nil, errorfamily.WrapInfrastructuref(err, codeGit, "list tracked-but-ignored files")
 	}
 
 	var paths []string
@@ -162,7 +166,7 @@ func runGitWithInput(ctx context.Context, dir, input string, args ...string) ([]
 
 	output, err := command.Output()
 	if err != nil {
-		return nil, fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+		return nil, errorfamily.WrapInfrastructuref(err, codeGit, "git %s", strings.Join(args, " "))
 	}
 
 	return output, nil

@@ -12,10 +12,13 @@ import (
 	"strings"
 
 	"github.com/larsartmann/go-finding"
+	errorfamily "github.com/larsartmann/go-error-family"
 	linter "github.com/larsartmann/go-linter-sdk"
 
 	binarycheck "github.com/larsartmann/binary-checker"
 )
+
+const codeCLI = "binary_checker.cli"
 
 const (
 	exitClean       = 0
@@ -144,7 +147,7 @@ func render(opts options, stdout io.Writer, partitions reportPartitions, scan *b
 	case "sarif":
 		return renderSARIF(stdout, partitions)
 	default:
-		return fmt.Errorf("unknown format %q (want human, json, or sarif)", opts.format)
+		return errorfamily.Newf(errorfamily.Rejection, codeCLI, "unknown format %q (want human, json, or sarif)", opts.format)
 	}
 }
 
@@ -183,13 +186,13 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	case 1:
 		opts.dir = flags.Arg(0)
 	default:
-		return opts, errors.New("expected at most one directory argument")
+		return opts, errorfamily.Newf(errorfamily.Rejection, codeCLI, "expected at most one directory argument, got %d", flags.NArg())
 	}
 
 	switch opts.format {
 	case "human", "json", "sarif":
 	default:
-		return opts, fmt.Errorf("unknown format %q (want human, json, or sarif)", opts.format)
+		return opts, errorfamily.Newf(errorfamily.Rejection, codeCLI, "unknown format %q (want human, json, or sarif)", opts.format)
 	}
 
 	return opts, nil
@@ -202,7 +205,7 @@ func parseThreshold(value string) (finding.Confidence, error) {
 
 	threshold, err := finding.ParseConfidence(value)
 	if err != nil {
-		return 0, fmt.Errorf("parse --min-confidence %q: %w", value, err)
+		return 0, errorfamily.WrapRejectionf(err, codeCLI, "parse --min-confidence %q", value)
 	}
 
 	return threshold, nil
@@ -219,13 +222,17 @@ func selectRules(all []linter.Rule, enable, disable string) ([]linter.Rule, erro
 
 	for id := range enableSet {
 		if !known[id] {
-			return nil, fmt.Errorf("unknown rule %q (known: %s)", id, strings.Join(binarycheck.AllRuleIDs(), ", "))
+			return nil, errorfamily.Newf(errorfamily.Rejection, 
+				codeCLI, "unknown rule %q (known: %s)", id, strings.Join(binarycheck.AllRuleIDs(), ", "),
+			)
 		}
 	}
 
 	for id := range disableSet {
 		if !known[id] {
-			return nil, fmt.Errorf("unknown rule %q (known: %s)", id, strings.Join(binarycheck.AllRuleIDs(), ", "))
+			return nil, errorfamily.Newf(errorfamily.Rejection, 
+				codeCLI, "unknown rule %q (known: %s)", id, strings.Join(binarycheck.AllRuleIDs(), ", "),
+			)
 		}
 	}
 
@@ -242,7 +249,7 @@ func selectRules(all []linter.Rule, enable, disable string) ([]linter.Rule, erro
 	}
 
 	if len(selected) == 0 {
-		return nil, errors.New("no rules selected")
+		return nil, errorfamily.Newf(errorfamily.Rejection, codeCLI, "no rules selected")
 	}
 
 	return selected, nil

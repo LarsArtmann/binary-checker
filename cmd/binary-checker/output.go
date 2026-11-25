@@ -8,9 +8,12 @@ import (
 	"encoding/json/jsontext"
 
 	"github.com/larsartmann/go-finding"
+	errorfamily "github.com/larsartmann/go-error-family"
 
 	binarycheck "github.com/larsartmann/binary-checker"
 )
+
+const codeOutput = "binary_checker.output"
 
 type reportPartitions struct {
 	actionable []finding.Finding
@@ -165,11 +168,11 @@ func renderJSON(writer io.Writer, partitions reportPartitions, scan *binarycheck
 
 	data, err := json.Marshal(output, jsontext.WithIndentPrefix(""), jsontext.WithIndent("  "))
 	if err != nil {
-		return fmt.Errorf("encode JSON report: %w", err)
+		return errorfamily.WrapInfrastructuref(err, codeOutput, "encode JSON report")
 	}
 
 	if _, err := fmt.Fprintf(writer, "%s\n", data); err != nil {
-		return fmt.Errorf("write JSON report: %w", err)
+		return errorfamily.WrapInfrastructuref(err, codeOutput, "write JSON report")
 	}
 
 	return nil
@@ -187,15 +190,15 @@ func renderSARIF(writer io.Writer, partitions reportPartitions) error {
 
 	data, err := report.ToSARIF()
 	if err != nil {
-		return fmt.Errorf("encode SARIF report: %w", err)
+		return errorfamily.WrapInfrastructuref(err, codeOutput, "encode SARIF report")
 	}
 
 	if _, err := writer.Write(data); err != nil {
-		return fmt.Errorf("write SARIF report: %w", err)
+		return errorfamily.WrapInfrastructuref(err, codeOutput, "write SARIF report")
 	}
 
 	if _, err := fmt.Fprintln(writer); err != nil {
-		return fmt.Errorf("write SARIF report: %w", err)
+		return errorfamily.WrapInfrastructuref(err, codeOutput, "write SARIF report")
 	}
 
 	return nil

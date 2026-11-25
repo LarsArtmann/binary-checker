@@ -3,12 +3,13 @@ package binarycheck
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+
+	errorfamily "github.com/larsartmann/go-error-family"
 )
 
 const (
@@ -23,9 +24,11 @@ const (
 	DefaultSmallImageMaxBytes int64 = 1024 * 1024
 )
 
+const codeConfig = "binary_checker.config"
+
 // ErrConfig marks configuration problems: the input file is the defect, not
-// the repository contents.
-var ErrConfig = errors.New("binary-checker config")
+// the repository contents. It is a Rejection: retrying cannot help.
+var ErrConfig error = errorfamily.NewRejection(codeConfig, "binary-checker config")
 
 // IgnoreEntry suppresses findings for matching paths. A non-empty reason is
 // mandatory: an unexplained ignore is debt that outlives its justification.
@@ -95,7 +98,9 @@ func LoadConfig(explicitPath, root string) (Config, error) {
 	} else if !filepath.IsAbs(path) {
 		absolute, err := filepath.Abs(path)
 		if err != nil {
-			return Config{}, fmt.Errorf("%w: resolve %q: %w", ErrConfig, path, err)
+			return Config{}, errorfamily.WrapRejectionf(
+				err, codeConfig, "resolve explicit config path %q", path,
+			)
 		}
 
 		path = absolute
@@ -103,11 +108,11 @@ func LoadConfig(explicitPath, root string) (Config, error) {
 
 	config, err := readConfigFile(path, explicitPath != "")
 	if err != nil {
-		return Config{}, err
+		return Config{}, errorfamily.WrapRejectionf(err, codeConfig, "read config %q", path)
 	}
 
 	if err := config.Validate(); err != nil {
-		return Config{}, err
+		return Config{}, errorfamily.WrapRejectionf(err, codeConfig, "validate config %q", path)
 	}
 
 	return config, nil
@@ -120,7 +125,7 @@ func readConfigFile(path string, required bool) (Config, error) {
 			return DefaultConfig(), nil
 		}
 
-		return Config{}, fmt.Errorf("%w: open %q: %w", ErrConfig, path, err)
+		return Config{}, errorfamily.WrapRejectionf(err, codeConfig, "open %q", path)
 	}
 
 	defer func() { _ = file.Close() }()
@@ -130,13 +135,15 @@ func readConfigFile(path string, required bool) (Config, error) {
 
 	var config Config
 	if err := decoder.Decode(&config); err != nil {
-		return Config{}, fmt.Errorf("%w: parse %q: %w", ErrConfig, path, err)
+		return Config{}, errorfamily.WrapRejectionf(err, codeConfig, "parse %q", path)
 	}
 
 	// Reject trailing JSON values: a second object is almost always an
 	// accidental copy-paste, and silently ignoring it hides the mistake.
 	if err := decoder.Decode(new(any)); err != io.EOF {
-		return Config{}, fmt.Errorf("%w: parse %q: trailing data after the JSON object", ErrConfig, path)
+		return Config{}, errorfamily.Newf(errorfamily.Rejection, 
+			codeConfig, "parse %q: trailing data after the JSON object", path,
+		)
 	}
 
 	return config, nil
@@ -152,13 +159,13 @@ func (c Config) Validate() error {
 
 	for i, entry := range c.Ignore {
 		if strings.TrimSpace(entry.Path) == "" {
-			return fmt.Errorf("%w: ignore[%d] has an empty path", ErrConfig, i)
+			return errorfamily.Newf(errorfamily.Rejection, codeConfig, "ignore[%d] has an empty path", i)
 		}
 
 		if strings.TrimSpace(entry.Reason) == "" {
-			return fmt.Errorf(
-				"%w: ignore[%d] (%s) must state a reason: an unexplained ignore outlives its justification",
-				ErrConfig,
+			return errorfamily.Newf(errorfamily.Rejection, 
+				codeConfig,
+				"ignore[%d] (%s) must state a reason: an unexplained ignore outlives its justification",
 				i,
 				entry.Path,
 			)
@@ -166,17 +173,19 @@ func (c Config) Validate() error {
 
 		for _, rule := range entry.Rules {
 			if !knownRules[rule] {
-				return fmt.Errorf("%w: ignore[%d] names unknown rule %q", ErrConfig, i, rule)
+				return errorfamily.Newf(errorfamily.Rejection, 
+					codeConfig, "ignore[%d] (%s) names unknown rule %q", i, entry.Path, rule,
+				)
 			}
 		}
 	}
 
 	if c.FontMaxBytes != nil && *c.FontMaxBytes < 0 {
-		return fmt.Errorf("%w: font_max_bytes must be >= 0", ErrConfig)
+		return errorfamily.Newf(errorfamily.Rejection, codeConfig, "font_max_bytes must be >= 0")
 	}
 
 	if c.SmallImageMaxBytes != nil && *c.SmallImageMaxBytes < 0 {
-		return fmt.Errorf("%w: small_image_max_bytes must be >= 0", ErrConfig)
+		return errorfamily.Newf(errorfamily.Rejection, codeConfig, "small_image_max_bytes must be >= 0")
 	}
 
 	return nil

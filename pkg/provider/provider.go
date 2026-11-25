@@ -10,12 +10,12 @@ package provider
 
 import (
 	"context"
-	"fmt"
 	"os/exec"
 	"sort"
 
 	"github.com/larsartmann/go-finding"
 	toolsdk "github.com/larsartmann/go-finding/toolsdk"
+	errorfamily "github.com/larsartmann/go-error-family"
 	linter "github.com/larsartmann/go-linter-sdk"
 
 	binarycheck "github.com/larsartmann/binary-checker"
@@ -36,7 +36,9 @@ var Provider = toolsdk.Register(toolsdk.Spec{
 
 func gitHealthCheck(ctx context.Context) error {
 	if _, err := exec.LookPath("git"); err != nil {
-		return fmt.Errorf("binary-check requires git on PATH: %w", err)
+		return errorfamily.WrapInfrastructuref(
+			err, "binary_checker.git", "binary-check requires git on PATH",
+		)
 	}
 
 	return nil

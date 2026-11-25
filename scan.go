@@ -11,9 +11,14 @@ import (
 	"sync"
 
 	"github.com/larsartmann/go-finding"
+	errorfamily "github.com/larsartmann/go-error-family"
 )
 
-const maxScanWorkers = 8
+const (
+	maxScanWorkers = 8
+	codeScan       = "binary_checker.scan"
+	codeRule       = "binary_checker.rule"
+)
 
 // ScanResult is one repository scan. Findings are sorted by path, line, then
 // rule so every output format is deterministic.
@@ -73,7 +78,7 @@ func (c *Checker) Scan(ctx context.Context, dir string) (*ScanResult, error) {
 
 	key, err := filepath.Abs(dir)
 	if err != nil {
-		return nil, fmt.Errorf("resolve scan directory %q: %w", dir, err)
+		return nil, errorfamily.WrapInfrastructuref(err, codeScan, "resolve scan directory %q", dir)
 	}
 
 	c.mu.Lock()
@@ -160,7 +165,7 @@ func (c *Checker) scan(ctx context.Context, dir string) (*ScanResult, error) {
 
 		item, buildErr := buildFinding(ruleID, inspection, reason)
 		if buildErr != nil {
-			return nil, buildErr
+			return nil, errorfamily.WrapCorruptionf(buildErr, codeRule, "build finding for %q", ruleID)
 		}
 
 		result.Findings = append(result.Findings, item)
@@ -326,7 +331,10 @@ func SortFindings(findings []finding.Finding) {
 func buildFinding(ruleID string, inspection fileInspection, suppressionReason string) (finding.Finding, error) {
 	rule := ruleByID(ruleID)
 	if rule == nil {
-		return finding.Finding{}, fmt.Errorf("unknown rule %q", ruleID)
+		return finding.Finding{}, errorfamily.Newf(errorfamily.Corruption, 
+			codeRule, "unknown rule %q while building finding for %q (suppression reason=%q)",
+			ruleID, inspection.file.Path, suppressionReason,
+		)
 	}
 
 	confidence := rule.confidence
@@ -366,7 +374,10 @@ func buildFinding(ruleID string, inspection fileInspection, suppressionReason st
 func buildIgnoredFinding(path, suppressionReason string) (finding.Finding, error) {
 	rule := ruleByID(RuleTrackedIgnored)
 	if rule == nil {
-		return finding.Finding{}, fmt.Errorf("unknown rule %q", RuleTrackedIgnored)
+		return finding.Finding{}, errorfamily.Newf(errorfamily.Corruption, 
+			codeRule, "unknown rule %q while building %q (suppression reason=%q)",
+			RuleTrackedIgnored, path, suppressionReason,
+		)
 	}
 
 	builder := finding.NewBuilder(
