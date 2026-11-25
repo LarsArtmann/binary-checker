@@ -9,36 +9,38 @@ on:
 permissions:
   contents: read
 
-defaults:
-  run:
-    # The host-mode runner does not check out into the step's default working
-    # directory; the repository lives at GITHUB_WORKSPACE.
-    working-directory: ${{ gitea.workspace }}
-
 jobs:
   check:
     # The self-hosted runner exposes the `native` label (host backend) and runs
-    # steps directly on the host. Its PATH carries Go but not every tool, so
-    # each step resolves its binary with an explicit fallback.
+    # steps directly on the host. Its PATH carries Go but not every tool, and
+    # steps start outside the checkout, so every step enters GITHUB_WORKSPACE
+    # and resolves its binary with an explicit fallback.
     runs-on: native
     steps:
       - name: Build and vet
         run: |
+          cd "${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is unset by the runner}"
           go build ./...
           go vet ./...
 
       - name: Test
-        run: go test -race -count=1 ./...
+        run: |
+          cd "${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is unset by the runner}"
+          go test -race -count=1 ./...
 
       - name: Lint
         run: |
+          cd "${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is unset by the runner}"
           lint="$(command -v golangci-lint || echo /run/current-system/sw/bin/golangci-lint)"
           "$lint" run ./...
 
       - name: Nix build (compiles and runs the suite in the sandbox)
         run: |
+          cd "${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is unset by the runner}"
           nix_bin="$(command -v nix || echo /run/current-system/sw/bin/nix)"
           "$nix_bin" build . --print-build-logs
 
       - name: Self-scan
-        run: go run ./cmd/binary-checker .
+        run: |
+          cd "${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is unset by the runner}"
+          go run ./cmd/binary-checker .
