@@ -11,7 +11,7 @@ import (
 	errorfamily "github.com/larsartmann/go-error-family"
 	"github.com/larsartmann/go-finding"
 
-	binarycheck "github.com/larsartmann/binary-checker"
+	"github.com/larsartmann/binary-checker/pkg/binarycheck"
 )
 
 const baselineVersion = 1

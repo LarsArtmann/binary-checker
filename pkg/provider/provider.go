@@ -17,7 +17,7 @@ import (
 	toolsdk "github.com/larsartmann/go-finding/toolsdk"
 	linter "github.com/larsartmann/go-linter-sdk"
 
-	binarycheck "github.com/larsartmann/binary-checker"
+	"github.com/larsartmann/binary-checker/pkg/binarycheck"
 )
 
 // codeDetect classifies an error that reaches the detector unclassified. The

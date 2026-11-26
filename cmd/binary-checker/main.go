@@ -15,7 +15,7 @@ import (
 	"github.com/larsartmann/go-finding"
 	linter "github.com/larsartmann/go-linter-sdk"
 
-	binarycheck "github.com/larsartmann/binary-checker"
+	"github.com/larsartmann/binary-checker/pkg/binarycheck"
 )
 
 // Exit codes. 0, 1, and 2 are verdicts about findings; everything else means
